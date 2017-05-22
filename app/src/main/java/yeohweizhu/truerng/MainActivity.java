@@ -5,6 +5,7 @@ import android.app.Application;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.ImageFormat;
 import android.hardware.Camera;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
@@ -50,9 +51,23 @@ public class MainActivity extends AppCompatActivity {
 
         mPictureTakenCallBack = new ICamera.PictureTakenCallBack(){
             @Override
-            public void onPictureTaken(byte[] data) {
-                Bitmap bitmap;
-                bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
+            public void onPictureTaken(byte[] imageData, int imageFormat) {
+                Bitmap bitmap=null;
+
+                if ( imageFormat == ImageFormat.JPEG){
+                    bitmap = BitmapFactory.decodeByteArray(imageData, 0, imageData.length);
+                }
+                else if (imageFormat == ImageFormat.YUV_420_888){
+//                    R = Y + 1.402 (Cr-128)
+//                    G = Y - 0.34414 (Cb-128) - 0.71414 (Cr-128)
+//                    B = Y + 1.772 (Cb-128)
+                }
+                else if (imageFormat == ImageFormat.RAW_SENSOR){
+
+                }
+
+
+
                 sampleImageView.setImageBitmap(bitmap);
             }
         };

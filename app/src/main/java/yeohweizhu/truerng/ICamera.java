@@ -1,5 +1,7 @@
 package yeohweizhu.truerng;
 
+import android.graphics.ImageFormat;
+
 /**
  * Created by yeohw on 5/15/2017.
  */
@@ -7,6 +9,7 @@ package yeohweizhu.truerng;
 public interface ICamera {
     void takePicture();
     public interface PictureTakenCallBack{
-        void onPictureTaken(byte[] rawData);
+        //format as in android.graphics ImageFormat int classifier
+        void onPictureTaken(byte[] imageData, int format);
     }
 }

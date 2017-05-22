@@ -3,6 +3,7 @@ package yeohweizhu.truerng;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.ImageFormat;
 import android.hardware.Camera;
 import android.util.Log;
 import android.view.SurfaceView;
@@ -46,7 +47,7 @@ public class CameraPreLollipop implements ICamera {
                 camera.release();
                 camera = null;
 
-                mCallback.onPictureTaken(data);
+                mCallback.onPictureTaken(data, ImageFormat.JPEG);
             }
         };
     }
@@ -61,12 +62,6 @@ public class CameraPreLollipop implements ICamera {
             e.printStackTrace();
         }
         camera.startPreview();
-
-//        try {
-//            Thread.sleep(4000);
-//        } catch (InterruptedException e) {
-//            e.printStackTrace();
-//        }
         camera.takePicture(null,null,mInternalCallback);
     }
 }
