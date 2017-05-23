@@ -155,6 +155,7 @@ class CameraLollipop implements ICamera {
     private void createCameraCaptureSession() {
         List<Surface> outputSurfaces = new LinkedList<>();
         outputSurfaces.add(imageReader.getSurface());
+        outputSurfaces.add(mDummySurface);
 
         try {
             cameraDevice.createCaptureSession(outputSurfaces, new CameraCaptureSession.StateCallback() {
