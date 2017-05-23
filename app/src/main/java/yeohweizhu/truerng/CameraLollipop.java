@@ -192,7 +192,6 @@ class CameraLollipop implements ICamera {
                     if (dummyCount==24){
                         createCaptureRequest();
                     }
-
                     dummyCount++;
                 }
             }, null);
