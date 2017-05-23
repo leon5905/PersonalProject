@@ -5,6 +5,7 @@ import android.app.Application;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Color;
 import android.graphics.ImageFormat;
 import android.hardware.Camera;
 import android.support.v4.app.ActivityCompat;
@@ -51,19 +52,28 @@ public class MainActivity extends AppCompatActivity {
 
         mPictureTakenCallBack = new ICamera.PictureTakenCallBack(){
             @Override
-            public void onPictureTaken(byte[] imageData, int imageFormat) {
+            public void onPictureTaken(byte[] imageData,byte[] R,byte[] G,byte[] B, int imageFormat) {
                 Bitmap bitmap=null;
 
                 if ( imageFormat == ImageFormat.JPEG){
                     bitmap = BitmapFactory.decodeByteArray(imageData, 0, imageData.length);
                 }
                 else if (imageFormat == ImageFormat.YUV_420_888){
-//                    R = Y + 1.402 (Cr-128)
-//                    G = Y - 0.34414 (Cb-128) - 0.71414 (Cr-128)
-//                    B = Y + 1.772 (Cb-128)
+
                 }
                 else if (imageFormat == ImageFormat.RAW_SENSOR){
 
+                }
+
+                for (int i=0;i<50;i++){
+                    for (int y=0;y<50;y++){
+                        int pixel = bitmap.getPixel(i,y);
+                        int red = Color.red(pixel);
+                        int green = Color.green(pixel);
+                        int blue = Color.blue(pixel);
+                        System.out.print(red + " , ");
+                    }
+                    System.out.println();
                 }
 
 

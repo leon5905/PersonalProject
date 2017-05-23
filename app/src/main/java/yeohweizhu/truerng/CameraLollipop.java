@@ -4,6 +4,7 @@ import android.app.Service;
 import android.content.Context;
 import android.graphics.ImageFormat;
 import android.graphics.PixelFormat;
+import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraCharacteristics;
@@ -11,6 +12,7 @@ import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.CaptureResult;
+import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.media.ImageReader;
@@ -55,6 +57,11 @@ class CameraLollipop implements ICamera {
     private String cameraId;
     private CameraDevice cameraDevice;
     private CameraCaptureSession cameraCaptureSession;
+    private SurfaceTexture mDummyPreview = new SurfaceTexture(1);
+    private Surface mDummySurface = new Surface(mDummyPreview);
+    private int dummyCount;
+    private int imageFormat;
+
 
     private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
     static {
@@ -98,7 +105,9 @@ class CameraLollipop implements ICamera {
             int picWidth  = outputSize.getWidth(); //TODO change to desired resolution
             int picHeight = outputSize.getHeight(); //TODO change to desired resolution
 
-            imageReader = ImageReader.newInstance(picWidth, picHeight, ImageFormat.RAW_SENSOR, 2);
+            imageFormat = getOutputFormat(manager.getCameraCharacteristics(backFacingCameraId));
+
+            imageReader = ImageReader.newInstance(picWidth, picHeight, imageFormat, 4);
             imageReader.setOnImageAvailableListener(onImageAvailableListener, backgroundHandler);
 
         } catch (CameraAccessException e) {
@@ -110,6 +119,7 @@ class CameraLollipop implements ICamera {
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     @Override
     public void takePicture() {
+        dummyCount=0;
         openCamera();
     }
 
@@ -151,11 +161,40 @@ class CameraLollipop implements ICamera {
                 @Override
                 public void onConfigured(@NonNull CameraCaptureSession session) {
                     cameraCaptureSession = session;
-                    createCaptureRequest();
+                    createPreviewRequest();
                 }
 
                 @Override
                 public void onConfigureFailed(@NonNull CameraCaptureSession session) {}
+            }, null);
+
+        } catch (CameraAccessException e) {
+            e.printStackTrace();
+        }
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    private void createPreviewRequest() {
+        try {
+            CaptureRequest.Builder requestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
+            requestBuilder.addTarget(mDummySurface);
+
+            // Focus
+            requestBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO);
+
+            // Orientation
+            int rotation = ((WindowManager) (mContext.getSystemService(Service.WINDOW_SERVICE))).getDefaultDisplay().getRotation();
+            requestBuilder.set(CaptureRequest.JPEG_ORIENTATION, ORIENTATIONS.get(rotation));
+
+            cameraCaptureSession.setRepeatingRequest(requestBuilder.build(),  new CameraCaptureSession.CaptureCallback() {
+                @Override
+                public void onCaptureCompleted(CameraCaptureSession session, CaptureRequest request, TotalCaptureResult result) {
+                    if (dummyCount==24){
+                        createCaptureRequest();
+                    }
+
+                    dummyCount++;
+                }
             }, null);
 
         } catch (CameraAccessException e) {
@@ -195,14 +234,36 @@ class CameraLollipop implements ICamera {
             System.out.println("Nanosecond Taken: " + elapsedTime);
 
             Image image = imageReader.acquireLatestImage();
-            ByteBuffer buffer = image.getPlanes()[0].getBuffer();
-            byte[] bytes = new byte[buffer.remaining()];
-            buffer.get(bytes);
+            ByteBuffer buffer;
+            byte[] bytes=null;
+            byte[] R=null,G=null,B=null;
+
+            if (imageFormat==ImageFormat.RAW_SENSOR){
+
+            }
+            else if (imageFormat == ImageFormat.YUV_420_888){
+                buffer = image.getPlanes()[0].getBuffer();
+                byte[]Y = new byte[buffer.remaining()];
+                buffer.get(bytes);
+
+                buffer = image.getPlanes()[1].getBuffer();
+                byte[]cb = new byte[buffer.remaining()];
+                buffer.get(bytes);
+
+                buffer = image.getPlanes()[2].getBuffer();
+                byte[]cr = new byte[buffer.remaining()];
+                buffer.get(bytes);
+            }
+            else{
+                buffer = image.getPlanes()[0].getBuffer();
+                bytes = new byte[buffer.remaining()];
+                buffer.get(bytes);
+            }
 
             //TODO try to get pixel
             System.out.println("Byte Array Length : " + bytes.length);
 
-            mCallback.onPictureTaken(bytes, ImageFormat.JPEG); //TODO change image format
+            mCallback.onPictureTaken(bytes,R,G,B, imageFormat);
 
             image.close();
             //cameraDevice.close();
@@ -250,6 +311,29 @@ class CameraLollipop implements ICamera {
         return maxRes;
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    private static int getOutputFormat(CameraCharacteristics cameraCharacteristics) {
+        //TODO remove this
+        if (true)
+            return ImageFormat.JPEG;
 
+        StreamConfigurationMap streamConfigurationMap = cameraCharacteristics
+                .get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+
+        int[] formatArrays = streamConfigurationMap.getOutputFormats();
+        System.out.print("File Format Supported : ");
+        for (int i:formatArrays){
+            System.out.print(i+ " , ");
+        }
+        System.out.println();
+
+        for (int i:formatArrays){
+            if (i == ImageFormat.RAW_SENSOR){
+                return i;
+            }
+        }
+
+        return ImageFormat.YUV_420_888;
+    }
 }
 

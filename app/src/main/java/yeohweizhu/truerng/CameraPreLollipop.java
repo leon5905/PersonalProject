@@ -47,7 +47,7 @@ public class CameraPreLollipop implements ICamera {
                 camera.release();
                 camera = null;
 
-                mCallback.onPictureTaken(data, ImageFormat.JPEG);
+                mCallback.onPictureTaken(data,null,null,null, ImageFormat.JPEG);
             }
         };
     }
