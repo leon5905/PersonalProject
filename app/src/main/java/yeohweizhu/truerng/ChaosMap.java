@@ -12,7 +12,6 @@ public class ChaosMap {
         long elapsedTime;
         long startTime;
 
-
         startTime = System.nanoTime();
         for (int i=0;i<1;i++) {
             TentMap(0.5, 1000, 1.99);
