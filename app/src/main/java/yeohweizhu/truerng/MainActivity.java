@@ -8,6 +8,7 @@ import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.ImageFormat;
 import android.hardware.Camera;
+import android.media.Image;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
@@ -52,18 +53,46 @@ public class MainActivity extends AppCompatActivity {
 
         mPictureTakenCallBack = new ICamera.PictureTakenCallBack(){
             @Override
-            public void onPictureTaken(byte[] imageData,byte[] R,byte[] G,byte[] B, int imageFormat) {
+            public void onPictureTaken(Image image) {
                 Bitmap bitmap=null;
+                byte[] bytes=null;
+                int imageFormat = image.getFormat();
 
                 if ( imageFormat == ImageFormat.JPEG){
-                    bitmap = BitmapFactory.decodeByteArray(imageData, 0, imageData.length);
+                    ByteBuffer buffer = image.getPlanes()[0].getBuffer();
+                    bytes = new byte[buffer.remaining()];
+                    buffer.get(bytes);
+
+                    bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
                 }
                 else if (imageFormat == ImageFormat.YUV_420_888){
-
+                    bitmap = ImageFormatConverter.YUV_420_888_toRGB(image,image.getWidth(),image.getHeight(),getApplicationContext());
+                    bitmap = ImageFormatConverter.RotateBitmap(bitmap,90);
                 }
                 else if (imageFormat == ImageFormat.RAW_SENSOR){
+//                    System.out.println("Tracking:" + width + " " +  height + "  " + imageData.length );
+//                    bitmap = Bitmap.createBitmap(width, height,Bitmap.Config.ARGB_8888);
+//                    bitmap.copyPixelsFromBuffer(ByteBuffer.wrap(imageData));
 
+//                    byte [] source = imageData; //Comes from somewhere...
+//                    byte [] Bits = new byte[source.length*4]; //That's where the ARGB array goes.
+//                    int i;
+//                    for(i=0;i<source.length;i++)
+//                    {
+//                        Bits[i*4] =
+//                        Bits[i*4+1] =
+//                         Bits[i*4+2] = ~source[i]; //Invert the source bits
+//                        Bits[i*4+3] = -1;//0xff, that's the alpha.
+//                    }
+//
+//                    //Now put these nice ARGB pixels into a Bitmap object
+//                    Bitmap bm = Bitmap.createBitmap(Width, Height, Bitmap.Config.ARGB_8888);
+//                    bm.copyPixelsFromBuffer(ByteBuffer.wrap(Bits));
                 }
+
+                //TODO try to get pixel
+                if (bytes!=null)
+                    System.out.println("Byte Array Length : " + bytes.length);
 
                 for (int i=0;i<50;i++){
                     for (int y=0;y<50;y++){
@@ -76,9 +105,20 @@ public class MainActivity extends AppCompatActivity {
                     System.out.println();
                 }
 
-
-
                 sampleImageView.setImageBitmap(bitmap);
+            }
+
+            @Override
+            public void onPictureTaken(byte[] image, int imageFormat, int width, int height) {
+                if (imageFormat==ImageFormat.JPEG){
+                    Bitmap bitmap = BitmapFactory.decodeByteArray(image, 0, image.length);
+                    sampleImageView.setImageBitmap(bitmap);
+                }
+                else if (imageFormat==ImageFormat.RAW_SENSOR){
+
+                }
+
+
             }
         };
 
@@ -108,6 +148,9 @@ public class MainActivity extends AppCompatActivity {
         // Example of a call to a native method
         // TextView tv = (TextView) findViewById(R.id.sample_text);
         // tv.setText(stringFromJNI());
+//        ChaosMap.Test();
+//        ChaosMap.TestFixed();
+        ChaosMap.TestFixedMap();
     }
 
     @Override

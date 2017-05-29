@@ -12,6 +12,7 @@ import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.CaptureResult;
+import android.hardware.camera2.DngCreator;
 import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
@@ -26,6 +27,8 @@ import android.util.SparseIntArray;
 import android.view.Surface;
 import android.view.WindowManager;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
@@ -56,7 +59,12 @@ class CameraLollipop implements ICamera {
     private HandlerThread backgroundThread;
     private String cameraId;
     private CameraDevice cameraDevice;
+    private CameraCharacteristics cameraCharacteristics;
+    private int picWidth;
+    private int picHeight;
     private CameraCaptureSession cameraCaptureSession;
+    private TotalCaptureResult captureResult;
+    private Image captureImage;
     private SurfaceTexture mDummyPreview = new SurfaceTexture(1);
     private Surface mDummySurface = new Surface(mDummyPreview);
     private int dummyCount;
@@ -100,10 +108,11 @@ class CameraLollipop implements ICamera {
             }
 
             cameraId= backFacingCameraId;
+            cameraCharacteristics = manager.getCameraCharacteristics(backFacingCameraId);
 
-            Size outputSize = getMaximumOutputSizes(manager.getCameraCharacteristics(backFacingCameraId));
-            int picWidth  = outputSize.getWidth(); //TODO change to desired resolution
-            int picHeight = outputSize.getHeight(); //TODO change to desired resolution
+            Size outputSize = getMaximumOutputSizes(cameraCharacteristics);
+            picWidth  = outputSize.getWidth(); //TODO change to desired resolution
+            picHeight = outputSize.getHeight(); //TODO change to desired resolution
 
             imageFormat = getOutputFormat(manager.getCameraCharacteristics(backFacingCameraId));
 
@@ -120,6 +129,8 @@ class CameraLollipop implements ICamera {
     @Override
     public void takePicture() {
         dummyCount=0;
+        captureResult=null;
+        captureImage=null;
         openCamera();
     }
 
@@ -217,7 +228,17 @@ class CameraLollipop implements ICamera {
             int rotation = ((WindowManager) (mContext.getSystemService(Service.WINDOW_SERVICE))).getDefaultDisplay().getRotation();
             requestBuilder.set(CaptureRequest.JPEG_ORIENTATION, ORIENTATIONS.get(rotation));
 
-            cameraCaptureSession.capture(requestBuilder.build(), null, null);
+            cameraCaptureSession.capture(requestBuilder.build(), new CameraCaptureSession.CaptureCallback(){
+                @Override
+                public void onCaptureCompleted(CameraCaptureSession session, CaptureRequest request, @NonNull TotalCaptureResult result) {
+                    captureResult = result;
+                    if (captureImage!=null && captureImage.getFormat()==ImageFormat.RAW_SENSOR){
+                        byte[] bytes = obtainDngByte(captureResult,captureImage);
+                        mCallback.onPictureTaken(captureImage);
+                        captureImage.close();
+                    }
+                }
+            }, null);
 
         } catch (CameraAccessException e) {
             e.printStackTrace();
@@ -233,43 +254,49 @@ class CameraLollipop implements ICamera {
             long elapsedTime = System.nanoTime() - nanoSecondStartTime;
             System.out.println("Nanosecond Taken: " + elapsedTime);
 
-            Image image = imageReader.acquireLatestImage();
-            ByteBuffer buffer;
-            byte[] bytes=null;
-            byte[] R=null,G=null,B=null;
+            captureImage = imageReader.acquireLatestImage();
+//            if (imageFormat==ImageFormat.RAW_SENSOR){
+//                captureImage = image;
+//                if (captureResult!=null) {
+//                    bytes = obtainDngByte(captureResult,captureImage);
+//                }
+//                else{
+//                    return;
+//                }
+//            }
 
-            if (imageFormat==ImageFormat.RAW_SENSOR){
-
-            }
-            else if (imageFormat == ImageFormat.YUV_420_888){
-                buffer = image.getPlanes()[0].getBuffer();
-                byte[]Y = new byte[buffer.remaining()];
-                buffer.get(bytes);
-
-                buffer = image.getPlanes()[1].getBuffer();
-                byte[]cb = new byte[buffer.remaining()];
-                buffer.get(bytes);
-
-                buffer = image.getPlanes()[2].getBuffer();
-                byte[]cr = new byte[buffer.remaining()];
-                buffer.get(bytes);
+            if (captureImage.getFormat()==ImageFormat.RAW_SENSOR){
+                if (captureResult!=null) {
+                    byte[] bytes = obtainDngByte(captureResult,captureImage);
+                    mCallback.onPictureTaken(captureImage);
+                    captureImage.close();
+                    captureImage=null;
+                }
             }
             else{
-                buffer = image.getPlanes()[0].getBuffer();
-                bytes = new byte[buffer.remaining()];
-                buffer.get(bytes);
+                mCallback.onPictureTaken(captureImage);
+                captureImage.close();
+                captureImage=null;
             }
 
-            //TODO try to get pixel
-            System.out.println("Byte Array Length : " + bytes.length);
-
-            mCallback.onPictureTaken(bytes,R,G,B, imageFormat);
-
-            image.close();
             //cameraDevice.close();
             cameraCaptureSession.close(); //TODO maybe 1 capture session no need close??
         }
     };
+
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    private byte[] obtainDngByte(CaptureResult finalResult, Image finalImage){
+        DngCreator dngCreator = new DngCreator(cameraCharacteristics, finalResult);
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        try {
+            dngCreator.writeImage(output, finalImage);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        byte[] bytes = output.toByteArray();
+        return bytes;
+    }
 
 
     //Get Maximum Supported Camera Sensor Capture Resolution
@@ -315,7 +342,7 @@ class CameraLollipop implements ICamera {
     private static int getOutputFormat(CameraCharacteristics cameraCharacteristics) {
         //TODO remove this
         if (true)
-            return ImageFormat.JPEG;
+            return ImageFormat.YUV_420_888;
 
         StreamConfigurationMap streamConfigurationMap = cameraCharacteristics
                 .get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);

@@ -5,8 +5,8 @@ android {
     buildToolsVersion "25.0.1"
     defaultConfig {
         applicationId "yeohweizhu.truerng"
-        minSdkVersion 17
-        targetSdkVersion 25
+        minSdkVersion 21
+        targetSdkVersion 24
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
@@ -15,6 +15,9 @@ android {
                 cppFlags "-std=c++11"
             }
         }
+
+        renderscriptTargetApi 18
+        renderscriptSupportModeEnabled true
     }
     buildTypes {
         release {

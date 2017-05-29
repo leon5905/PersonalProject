@@ -5,6 +5,7 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.ImageFormat;
 import android.hardware.Camera;
+import android.media.Image;
 import android.util.Log;
 import android.view.SurfaceView;
 import android.widget.Toast;
@@ -47,7 +48,9 @@ public class CameraPreLollipop implements ICamera {
                 camera.release();
                 camera = null;
 
-                mCallback.onPictureTaken(data,null,null,null, ImageFormat.JPEG);
+                Camera.Size size = camera.getParameters().getPictureSize();
+
+                mCallback.onPictureTaken(data, ImageFormat.JPEG,size.width,size.height);
             }
         };
     }
