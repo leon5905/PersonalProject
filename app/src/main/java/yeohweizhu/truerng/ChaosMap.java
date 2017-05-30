@@ -13,6 +13,40 @@ public class ChaosMap {
         long startTime;
 
         startTime = System.nanoTime();
+        int in=0;
+        for (int i=0;i<10000;i++) {
+            in*=2;
+            in*=2;
+            in*=2;
+            in*=2;
+            in*=2;
+            in*=2;
+            in*=2;
+            in*=2;
+            in*=2;
+            in*=2;
+        }
+        elapsedTime = System.nanoTime() - startTime;
+        System.out.println("Int Ms Taken : " + elapsedTime);
+
+        startTime = System.nanoTime();
+        float fl=0;
+        for (int i=0;i<10000;i++) {
+            fl*=2.0f;
+            fl*=2.0f;
+            fl*=2.0f;
+            fl*=2.0f;
+            fl*=2.0f;
+            fl*=2.0f;
+            fl*=2.0f;
+            fl*=2.0f;
+            fl*=2.0f;
+            fl*=2.0f;
+        }
+        elapsedTime = System.nanoTime() - startTime;
+        System.out.println("Float Ms Taken: " + elapsedTime);
+
+        startTime = System.nanoTime();
         for (int i=0;i<1;i++) {
             TentMap(0.5, 1000, 1.99);
         }
