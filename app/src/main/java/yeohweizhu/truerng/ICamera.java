@@ -12,6 +12,7 @@ public interface ICamera {
     public interface PictureTakenCallBack{
         //format as in android.graphics ImageFormat int classifier
         //byte[] data can be null
+        void onPictureTaken(byte[] byteArr);
         void onPictureTaken(Image image);
         void onPictureTaken(byte[] image, int imageFormat, int width,int height);
     }

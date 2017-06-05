@@ -9,3 +9,4 @@ Java_yeohweizhu_truerng_MainActivity_stringFromJNI(
     std::string hello = "Hello from C++";
     return env->NewStringUTF(hello.c_str());
 }
+

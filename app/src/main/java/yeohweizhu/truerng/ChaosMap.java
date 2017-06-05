@@ -76,6 +76,13 @@ public class ChaosMap {
         elapsedTime = System.nanoTime() - startTime;
         System.out.println("Log Fixed - Ms Taken: " + elapsedTime);
 
+        startTime = System.nanoTime();
+        for (int i=0;i<1;i++) {
+            LogisticMapFixed_Inline(0.5, 1000, 3.99);
+        }
+        elapsedTime = System.nanoTime() - startTime;
+        System.out.println("Log Fixed Inlined - Ms Taken: " + elapsedTime);
+
 //        Fixed32[] ftent = TentMapFixed(0.5, 50, 1.99);
 //        double[] dtent = TentMap(0.5, 50, 1.99);
 //        for(int i=0;i<ftent.length;i++){
@@ -134,6 +141,8 @@ public class ChaosMap {
 //        }
     }
 
+
+
     public static double[] TentMap(double initValue, int iterNum, double controlParameter ){
         controlParameter=1.99;
 
@@ -180,6 +189,26 @@ public class ChaosMap {
         return returnValue;
     }
 
+    public static Fixed32[] TentMapFixed_Inline(double initValue, int iterNum, double controlParameter){
+        int scale;
+
+        controlParameter=1.99;
+
+        Fixed32 initValueFixed = Fixed32.fromDouble(initValue,30);
+        Fixed32 controlParameterFixed = Fixed32.fromDouble(controlParameter,30);
+        Fixed32 zeroPoint5 = Fixed32.fromDouble(0.5,30);
+        Fixed32 one = Fixed32.fromInt(1,30);
+
+        Fixed32[] returnValue = new Fixed32[iterNum];
+        returnValue[0] = initValueFixed;
+
+        for (int i=0;i<iterNum-1;i++){
+            returnValue[i+1] = ( returnValue[i].Compare(zeroPoint5)==-1? controlParameterFixed.Multiply(returnValue[i]) : controlParameterFixed.Multiply(one.Minus(returnValue[i])) );
+        }
+
+        return returnValue;
+    }
+
     public static Fixed32[] LogisticMapFixed(double initValue, int iterNum, double controlParameter ){
         controlParameter=3.99;
 
@@ -192,6 +221,25 @@ public class ChaosMap {
 
         for (int i=0;i<iterNum-1;i++){
             returnValue[i+1] = ( controlParameterFixed.Multiply( returnValue[i].Multiply( one.Minus(returnValue[i]) ) ) );
+        }
+
+        return returnValue;
+    }
+
+    public static long[] LogisticMapFixed_Inline(double initValue, int iterNum, double controlParameter ){
+        controlParameter=3.99;
+
+        int scale=29;
+
+        long initValueFixed = (long) (initValue * (double) (1<<scale));
+        long controlParameterFixed = (long) (controlParameter * (double) (1<<scale));
+        long one = 1 << scale;
+
+        long[] returnValue = new long[iterNum];
+        returnValue[0] = initValueFixed;
+
+        for (int i=0;i<iterNum-1;i++){
+            returnValue[i+1] =  (( controlParameterFixed *  ( (returnValue[i] * ( ( 1-(returnValue[i]) ) ) >> scale )   )  ) >> scale);
         }
 
         return returnValue;

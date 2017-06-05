@@ -233,7 +233,7 @@ class CameraLollipop implements ICamera {
                 public void onCaptureCompleted(CameraCaptureSession session, CaptureRequest request, @NonNull TotalCaptureResult result) {
                     captureResult = result;
                     if (captureImage!=null && captureImage.getFormat()==ImageFormat.RAW_SENSOR){
-                        byte[] bytes = obtainDngByte(captureResult,captureImage);
+//                        byte[] bytes = obtainDngByte(captureResult,captureImage);
                         mCallback.onPictureTaken(captureImage);
                         captureImage.close();
                     }
@@ -251,23 +251,11 @@ class CameraLollipop implements ICamera {
     private final ImageReader.OnImageAvailableListener onImageAvailableListener = new ImageReader.OnImageAvailableListener() {
         @Override
         public void onImageAvailable(ImageReader reader) {
-            long elapsedTime = System.nanoTime() - nanoSecondStartTime;
-            System.out.println("Nanosecond Taken: " + elapsedTime);
 
             captureImage = imageReader.acquireLatestImage();
-//            if (imageFormat==ImageFormat.RAW_SENSOR){
-//                captureImage = image;
-//                if (captureResult!=null) {
-//                    bytes = obtainDngByte(captureResult,captureImage);
-//                }
-//                else{
-//                    return;
-//                }
-//            }
-
             if (captureImage.getFormat()==ImageFormat.RAW_SENSOR){
                 if (captureResult!=null) {
-                    byte[] bytes = obtainDngByte(captureResult,captureImage);
+//                    byte[] bytes = obtainDngByte(captureResult,captureImage);
                     mCallback.onPictureTaken(captureImage);
                     captureImage.close();
                     captureImage=null;
@@ -342,7 +330,7 @@ class CameraLollipop implements ICamera {
     private static int getOutputFormat(CameraCharacteristics cameraCharacteristics) {
         //TODO remove this
         if (true)
-            return ImageFormat.YUV_420_888;
+            return ImageFormat.JPEG;
 
         StreamConfigurationMap streamConfigurationMap = cameraCharacteristics
                 .get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);

@@ -2,6 +2,7 @@ package yeohweizhu.truerng;
 
 import android.Manifest;
 import android.app.Application;
+import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -25,6 +26,7 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.nio.ByteBuffer;
 
 public class MainActivity extends AppCompatActivity {
@@ -41,6 +43,9 @@ public class MainActivity extends AppCompatActivity {
     //GUI
     private ImageView sampleImageView;
 
+    //Stopwatch
+    private long nanoSecondStartTime;
+
     // Used to load the 'native-lib' library on application startup.
     static {
         System.loadLibrary("native-lib");
@@ -53,7 +58,28 @@ public class MainActivity extends AppCompatActivity {
 
         mPictureTakenCallBack = new ICamera.PictureTakenCallBack(){
             @Override
+            public void onPictureTaken(byte[] byteArr) {
+                long elapsedTime = System.currentTimeMillis() - nanoSecondStartTime;
+                System.out.println("DNG Nanosecond Taken: " + elapsedTime);
+
+                FileOutputStream fos = null;
+                try {
+                    fos = openFileOutput("abc",  Context.MODE_PRIVATE);
+                    fos.write(byteArr);
+                    fos.close();
+                    System.out.println("Save File Complete");
+                } catch (FileNotFoundException e) {
+                    e.printStackTrace();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            @Override
             public void onPictureTaken(Image image) {
+                long elapsedTime = System.currentTimeMillis() - nanoSecondStartTime;
+                System.out.println("Raw Nanosecond Taken 1: " + elapsedTime);
+
                 Bitmap bitmap=null;
                 byte[] bytes=null;
                 int imageFormat = image.getFormat();
@@ -66,44 +92,75 @@ public class MainActivity extends AppCompatActivity {
                     bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
                 }
                 else if (imageFormat == ImageFormat.YUV_420_888){
-                    bitmap = ImageFormatConverter.YUV_420_888_toRGB(image,image.getWidth(),image.getHeight(),getApplicationContext());
-                    bitmap = ImageFormatConverter.RotateBitmap(bitmap,90);
+//                    bitmap = ImageFormatConverter.YUV_420_888_toRGB(image,image.getWidth(),image.getHeight(),getApplicationContext());
+
+                    //Rotate YUV to correct orientation
+                    //bitmap = ImageFormatConverter.RotateBitmap(bitmap,90);
                 }
                 else if (imageFormat == ImageFormat.RAW_SENSOR){
-//                    System.out.println("Tracking:" + width + " " +  height + "  " + imageData.length );
-//                    bitmap = Bitmap.createBitmap(width, height,Bitmap.Config.ARGB_8888);
-//                    bitmap.copyPixelsFromBuffer(ByteBuffer.wrap(imageData));
-
-//                    byte [] source = imageData; //Comes from somewhere...
-//                    byte [] Bits = new byte[source.length*4]; //That's where the ARGB array goes.
-//                    int i;
-//                    for(i=0;i<source.length;i++)
-//                    {
-//                        Bits[i*4] =
-//                        Bits[i*4+1] =
-//                         Bits[i*4+2] = ~source[i]; //Invert the source bits
-//                        Bits[i*4+3] = -1;//0xff, that's the alpha.
-//                    }
-//
-//                    //Now put these nice ARGB pixels into a Bitmap object
-//                    Bitmap bm = Bitmap.createBitmap(Width, Height, Bitmap.Config.ARGB_8888);
-//                    bm.copyPixelsFromBuffer(ByteBuffer.wrap(Bits));
                 }
+
+                //Save pixel value to file
+                int[] pixels = new int[bitmap.getWidth()*bitmap.getHeight()];
+                bitmap.getPixels(pixels,0,bitmap.getWidth(),0,0,bitmap.getWidth(),bitmap.getHeight());
+
+                byte[] byteArr= new byte[pixels.length*3];
+                for(int i=0;i<pixels.length;i++){
+                    byteArr[i*3] =  (byte) ((pixels[i]>>16) & 0xFF);
+                    byteArr[i*3+1] = (byte) ((pixels[i]>>8) & 0xFF);
+                    byteArr[i*3+2]= (byte) ((pixels[i]) & 0xFF);
+                }
+
+//
+//                Image.Plane[] planes = image.getPlanes();
+//                ByteBuffer buffer = planes[0].getBuffer();
+//                byte[] y = new byte[buffer.remaining()];
+//                buffer.get(y);
+//
+//                buffer = planes[1].getBuffer();
+//                byte[] u = new byte[buffer.remaining()];
+//                buffer.get(u);
+//
+//                buffer = planes[2].getBuffer();
+//                byte[] v = new byte[buffer.remaining()];
+//                buffer.get(v);
+//
+//                byte[] byteArr= new byte[y.length*2];
+//
+//                System.out.println("Y Length : " + y.length);
+//                System.out.println("U Length : " + u.length);
+//                System.out.println("V Length : " + v.length);
+//                for (int i=0;i<(y.length)-2;i++){
+//                    if (i%2==0){
+//                        byteArr[i*2] =  y[i];
+//                        byteArr[i*2+1]= u[ i/2 ];
+//                    }
+//                    else{
+//                        byteArr[i*2] =  y[i];
+//                        byteArr[i*2+1]= v[i/2];
+//                    }
+//                }
+//                byteArr[y.length*2-4] = y[y.length-2];
+//                byteArr[y.length*2-3] = u[u.length/2];
+//
+//                byteArr[y.length*2-2] = y[y.length-1];
+//                byteArr[y.length*2-1] = v[v.length/2];
+//
+//                FileOutputStream fos = null;
+//                try {
+//                    fos = openFileOutput("abc",  Context.MODE_PRIVATE);
+//                    fos.write(byteArr);
+//                    fos.close();
+//                    System.out.println("Save File Complete");
+//                } catch (FileNotFoundException e) {
+//                    e.printStackTrace();
+//                } catch (IOException e) {
+//                    e.printStackTrace();
+//                }
 
                 //TODO try to get pixel
                 if (bytes!=null)
                     System.out.println("Byte Array Length : " + bytes.length);
-
-                for (int i=0;i<50;i++){
-                    for (int y=0;y<50;y++){
-                        int pixel = bitmap.getPixel(i,y);
-                        int red = Color.red(pixel);
-                        int green = Color.green(pixel);
-                        int blue = Color.blue(pixel);
-                        System.out.print(red + " , ");
-                    }
-                    System.out.println();
-                }
 
                 sampleImageView.setImageBitmap(bitmap);
             }
@@ -117,8 +174,6 @@ public class MainActivity extends AppCompatActivity {
                 else if (imageFormat==ImageFormat.RAW_SENSOR){
 
                 }
-
-
             }
         };
 
@@ -131,6 +186,7 @@ public class MainActivity extends AppCompatActivity {
                 new View.OnClickListener() {
                     @Override
                     public void onClick(View view) {
+                        nanoSecondStartTime = System.currentTimeMillis();
                         mCameraService.takePicture();
                     }
                 }
@@ -150,6 +206,22 @@ public class MainActivity extends AppCompatActivity {
         // tv.setText(stringFromJNI());
 //        ChaosMap.Test();
 //        ChaosMap.TestFixed();
+//        ChaosMap.TestFixedMap();
+
+        nanoSecondStartTime = System.nanoTime();
+        long takenTime = System.nanoTime() - nanoSecondStartTime;
+        System.out.println("Empty Time = " + takenTime);
+
+        nanoSecondStartTime = System.nanoTime();
+        this.stringFromJava();
+        takenTime = System.nanoTime() - nanoSecondStartTime;
+        System.out.println("Java Time = " + takenTime);
+
+        nanoSecondStartTime = System.nanoTime();
+        this.stringFromJNI();
+        takenTime = System.nanoTime() - nanoSecondStartTime;
+        System.out.println("JNI Time = " + takenTime);
+
         ChaosMap.TestFixedMap();
     }
 
@@ -182,4 +254,8 @@ public class MainActivity extends AppCompatActivity {
      * which is packaged with this application.
      */
     public native String stringFromJNI();
+    public String stringFromJava(){
+        String str=  "Hello from Java";
+        return str;
+    }
 }

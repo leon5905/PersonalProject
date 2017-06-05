@@ -2,6 +2,9 @@ package yeohweizhu.truerng;
 
 /**
  * Created by yeohw on 5/29/2017.
+ * This class is a self fixed point implementation.
+ * The overhead of using this class is higher than its gain.
+ * It is thus not used in the project.
  */
 
 public class Fixed32 {
