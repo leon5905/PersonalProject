@@ -90,73 +90,153 @@ public class MainActivity extends AppCompatActivity {
                     buffer.get(bytes);
 
                     bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
-                }
-                else if (imageFormat == ImageFormat.YUV_420_888){
-//                    bitmap = ImageFormatConverter.YUV_420_888_toRGB(image,image.getWidth(),image.getHeight(),getApplicationContext());
+                    //Save pixel value to file
+                    int[] pixels = new int[bitmap.getWidth()*bitmap.getHeight()];
+                    bitmap.getPixels(pixels,0,bitmap.getWidth(),0,0,bitmap.getWidth(),bitmap.getHeight());
 
+                    byte[] byteArr= new byte[pixels.length*3];
+                    for(int i=0;i<pixels.length;i++){
+                        byteArr[i*3] =  (byte) ((pixels[i]>>16) & 0xFF);
+                        byteArr[i*3+1] = (byte) ((pixels[i]>>8) & 0xFF);
+                        byteArr[i*3+2]= (byte) ((pixels[i]) & 0xFF);
+                    }
+
+                }
+                else if (imageFormat == ImageFormat.YUV_420_888) {
+                    //bitmap = ImageFormatConverter.YUV_420_888_toRGB(image,image.getWidth(),image.getHeight(),getApplicationContext());
                     //Rotate YUV to correct orientation
                     //bitmap = ImageFormatConverter.RotateBitmap(bitmap,90);
+                    Image.Plane[] planes = image.getPlanes();
+                    ByteBuffer buffer = planes[0].getBuffer();
+                    byte[] y = new byte[buffer.remaining()];
+                    buffer.get(y);
+
+                    buffer = planes[1].getBuffer();
+                    byte[] u = new byte[buffer.remaining()];
+                    buffer.get(u);
+
+                    buffer = planes[2].getBuffer();
+                    byte[] v = new byte[buffer.remaining()];
+                    buffer.get(v);
+
+
+//                    byte[] byteArr = new byte[y.length * 2];
+//
+//                    System.out.println("Y Length : " + y.length);
+//                    System.out.println("U Length : " + u.length);
+//                    System.out.println("V Length : " + v.length);
+//                    for (int i = 0; i < (y.length) - 2; i++) {
+//                        if (i % 2 == 0) {
+//                            byteArr[i * 2] = y[i];
+//                            byteArr[i * 2 + 1] = u[i / 2];
+//                        } else {
+//                            byteArr[i * 2] = y[i];
+//                            byteArr[i * 2 + 1] = v[i / 2];
+//                        }
+//                    }
+//                    byteArr[y.length * 2 - 4] = y[y.length - 2];
+//                    byteArr[y.length * 2 - 3] = u[u.length / 2];
+//
+//                    byteArr[y.length * 2 - 2] = y[y.length - 1];
+//                    byteArr[y.length * 2 - 1] = v[v.length / 2];
+
+
+                    byte[] uTrimmed = new byte[u.length*7/8];
+                    byte[] vTrimmed = new byte[v.length*7/8];
+
+                    //Generate 7 byte out of 8 byte
+                    //Removing 7th bit
+                    int trimmedIndex=0;
+                    for (int i=0;i<u.length;){
+                        if (u.length-i<8)
+                            break;
+
+                        int range=7;
+                        int offset=1;
+                        long bit64=0;
+                        long bit64_v=0;
+
+                        for (int j=0;j<8;j++){
+                            //System.out.println(Integer.toBinaryString((int) u[i]) + " asd " + Long.toBinaryString(((long) (u[i]&0b10000000 | (u[i]<<2>>>1)) ) << (range*8+offset)));
+                            bit64 |= (  ((long) (u[i]&0b10000000 | ((u[i]&0b00111111) <<1) ) ) << (range*8+offset) ) ;
+//                            System.out.println("asd: " + String.format("%8s", Integer.toBinaryString(u[i] & 0xFF)).replace(' ', '0'));
+
+                            bit64_v |= (  ((long) (v[i]&0b10000000 | ((v[i]&0b00111111) <<1) ) ) << (range*8+offset) ) ;
+                            range--;
+                            offset++;
+                            i++;
+                        }
+
+//                        System.out.println("58 bit asd: " + Long.toBinaryString(bit64) );
+
+                        for (int byteNum=7;byteNum>0;byteNum--){
+                            uTrimmed[trimmedIndex]= (byte) ( (bit64>> ( 8*(byteNum) ))&0xff );
+                            //System.out.println("Byte asd: ? " + uTrimmed[trimmedIndex] + " ?? " +  String.format("%8s", Integer.toBinaryString(uTrimmed[trimmedIndex]  & 0xFF)).replace(' ', '0'));
+
+                            vTrimmed[trimmedIndex]= (byte) ((bit64_v>> ( 8*(byteNum) ))&0xff);
+
+                            trimmedIndex++;
+                        }
+                    }
+
+                    byte[] byteArr = new byte[uTrimmed.length*4];
+
+                    for (int i = 0; i < (uTrimmed.length*2); i++) {
+                        if (i % 2 == 0) {
+                            byteArr[i * 2] = y[i];
+                            byteArr[i * 2 + 1] = uTrimmed[i / 2];
+                        } else {
+                            byteArr[i * 2] = y[i];
+                            byteArr[i * 2 + 1] = vTrimmed[i / 2];
+                        }
+                    }
+
+                    FileOutputStream fos = null;
+                    try {
+                        fos = openFileOutput("abc", Context.MODE_PRIVATE);
+                        fos.write(byteArr);
+                        fos.close();
+                        System.out.println("Save File Complete");
+                    } catch (FileNotFoundException e) {
+                        e.printStackTrace();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+
+//                    for (int i=0;i<byteArr.length;){
+//                        if (byteArr[i]>0)
+//                            System.out.print(byteArr[i++] + " ");
+//                        else
+//                            i++;
+//                        i++;
+//                        //System.out.print(byteArr[i++] + " ");
+//                        if (byteArr[i]>0)
+//                            System.out.print(byteArr[i++] + " ");
+//                        else
+//                            i++;
+//                        i++;
+//                        System.out.println();
+//                    }
+
+//                    for (int i=0;i<byteArr.length;){
+//                        //System.out.print(byteArr[i++] + " ");
+//                        i++;
+//                        if (byteArr[i]<80 && byteArr[i]>-80)
+//                            System.out.print(byteArr[i++] + " ");
+//                        else
+//                            i++;
+//                        //System.out.print(byteArr[i++] + " ");
+//                        i++;
+//                        if (byteArr[i]<80 && byteArr[i]>-80)
+//                            System.out.print(byteArr[i++] + " ");
+//                        else
+//                            i++;
+//                        System.out.println();
+//                    }
                 }
                 else if (imageFormat == ImageFormat.RAW_SENSOR){
+                    //Do nothing
                 }
-
-                //Save pixel value to file
-                int[] pixels = new int[bitmap.getWidth()*bitmap.getHeight()];
-                bitmap.getPixels(pixels,0,bitmap.getWidth(),0,0,bitmap.getWidth(),bitmap.getHeight());
-
-                byte[] byteArr= new byte[pixels.length*3];
-                for(int i=0;i<pixels.length;i++){
-                    byteArr[i*3] =  (byte) ((pixels[i]>>16) & 0xFF);
-                    byteArr[i*3+1] = (byte) ((pixels[i]>>8) & 0xFF);
-                    byteArr[i*3+2]= (byte) ((pixels[i]) & 0xFF);
-                }
-
-//
-//                Image.Plane[] planes = image.getPlanes();
-//                ByteBuffer buffer = planes[0].getBuffer();
-//                byte[] y = new byte[buffer.remaining()];
-//                buffer.get(y);
-//
-//                buffer = planes[1].getBuffer();
-//                byte[] u = new byte[buffer.remaining()];
-//                buffer.get(u);
-//
-//                buffer = planes[2].getBuffer();
-//                byte[] v = new byte[buffer.remaining()];
-//                buffer.get(v);
-//
-//                byte[] byteArr= new byte[y.length*2];
-//
-//                System.out.println("Y Length : " + y.length);
-//                System.out.println("U Length : " + u.length);
-//                System.out.println("V Length : " + v.length);
-//                for (int i=0;i<(y.length)-2;i++){
-//                    if (i%2==0){
-//                        byteArr[i*2] =  y[i];
-//                        byteArr[i*2+1]= u[ i/2 ];
-//                    }
-//                    else{
-//                        byteArr[i*2] =  y[i];
-//                        byteArr[i*2+1]= v[i/2];
-//                    }
-//                }
-//                byteArr[y.length*2-4] = y[y.length-2];
-//                byteArr[y.length*2-3] = u[u.length/2];
-//
-//                byteArr[y.length*2-2] = y[y.length-1];
-//                byteArr[y.length*2-1] = v[v.length/2];
-//
-//                FileOutputStream fos = null;
-//                try {
-//                    fos = openFileOutput("abc",  Context.MODE_PRIVATE);
-//                    fos.write(byteArr);
-//                    fos.close();
-//                    System.out.println("Save File Complete");
-//                } catch (FileNotFoundException e) {
-//                    e.printStackTrace();
-//                } catch (IOException e) {
-//                    e.printStackTrace();
-//                }
 
                 //TODO try to get pixel
                 if (bytes!=null)

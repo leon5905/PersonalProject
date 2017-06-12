@@ -330,7 +330,7 @@ class CameraLollipop implements ICamera {
     private static int getOutputFormat(CameraCharacteristics cameraCharacteristics) {
         //TODO remove this
         if (true)
-            return ImageFormat.JPEG;
+            return ImageFormat.YUV_420_888;
 
         StreamConfigurationMap streamConfigurationMap = cameraCharacteristics
                 .get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
