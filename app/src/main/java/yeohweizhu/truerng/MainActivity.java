@@ -1,32 +1,23 @@
 package yeohweizhu.truerng;
 
 import android.Manifest;
-import android.app.Application;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.Color;
 import android.graphics.ImageFormat;
-import android.hardware.Camera;
 import android.media.Image;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
-import android.util.Log;
-import android.view.SurfaceView;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
-import android.widget.TextView;
-import android.widget.Toast;
 
-import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.OutputStreamWriter;
 import java.nio.ByteBuffer;
 
 public class MainActivity extends AppCompatActivity {
@@ -53,6 +44,7 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
@@ -119,28 +111,6 @@ public class MainActivity extends AppCompatActivity {
                     byte[] v = new byte[buffer.remaining()];
                     buffer.get(v);
 
-
-//                    byte[] byteArr = new byte[y.length * 2];
-//
-//                    System.out.println("Y Length : " + y.length);
-//                    System.out.println("U Length : " + u.length);
-//                    System.out.println("V Length : " + v.length);
-//                    for (int i = 0; i < (y.length) - 2; i++) {
-//                        if (i % 2 == 0) {
-//                            byteArr[i * 2] = y[i];
-//                            byteArr[i * 2 + 1] = u[i / 2];
-//                        } else {
-//                            byteArr[i * 2] = y[i];
-//                            byteArr[i * 2 + 1] = v[i / 2];
-//                        }
-//                    }
-//                    byteArr[y.length * 2 - 4] = y[y.length - 2];
-//                    byteArr[y.length * 2 - 3] = u[u.length / 2];
-//
-//                    byteArr[y.length * 2 - 2] = y[y.length - 1];
-//                    byteArr[y.length * 2 - 1] = v[v.length / 2];
-
-
                     byte[] uTrimmed = new byte[u.length*7/8];
                     byte[] vTrimmed = new byte[v.length*7/8];
 
@@ -191,10 +161,16 @@ public class MainActivity extends AppCompatActivity {
                         }
                     }
 
+                    byte[] finalByteArr = Postprocess.Postprocess(byteArr);
+
                     FileOutputStream fos = null;
                     try {
                         fos = openFileOutput("abc", Context.MODE_PRIVATE);
                         fos.write(byteArr);
+                        fos.close();
+
+                        fos = openFileOutput("abc_post", Context.MODE_PRIVATE);
+                        fos.write(finalByteArr);
                         fos.close();
                         System.out.println("Save File Complete");
                     } catch (FileNotFoundException e) {
@@ -203,39 +179,6 @@ public class MainActivity extends AppCompatActivity {
                         e.printStackTrace();
                     }
 
-//                    for (int i=0;i<byteArr.length;){
-//                        if (byteArr[i]>0)
-//                            System.out.print(byteArr[i++] + " ");
-//                        else
-//                            i++;
-//                        i++;
-//                        //System.out.print(byteArr[i++] + " ");
-//                        if (byteArr[i]>0)
-//                            System.out.print(byteArr[i++] + " ");
-//                        else
-//                            i++;
-//                        i++;
-//                        System.out.println();
-//                    }
-
-//                    for (int i=0;i<byteArr.length;){
-//                        //System.out.print(byteArr[i++] + " ");
-//                        i++;
-//                        if (byteArr[i]<80 && byteArr[i]>-80)
-//                            System.out.print(byteArr[i++] + " ");
-//                        else
-//                            i++;
-//                        //System.out.print(byteArr[i++] + " ");
-//                        i++;
-//                        if (byteArr[i]<80 && byteArr[i]>-80)
-//                            System.out.print(byteArr[i++] + " ");
-//                        else
-//                            i++;
-//                        System.out.println();
-//                    }
-                }
-                else if (imageFormat == ImageFormat.RAW_SENSOR){
-                    //Do nothing
                 }
 
                 //TODO try to get pixel
@@ -243,6 +186,8 @@ public class MainActivity extends AppCompatActivity {
                     System.out.println("Byte Array Length : " + bytes.length);
 
                 sampleImageView.setImageBitmap(bitmap);
+
+
             }
 
             @Override
@@ -284,9 +229,9 @@ public class MainActivity extends AppCompatActivity {
         // Example of a call to a native method
         // TextView tv = (TextView) findViewById(R.id.sample_text);
         // tv.setText(stringFromJNI());
-//        ChaosMap.Test();
-//        ChaosMap.TestFixed();
-//        ChaosMap.TestFixedMap();
+//        ChaosMapInline.Test();
+//        ChaosMapInline.TestFixed();
+//        ChaosMapInline.TestFixedMap();
 
         nanoSecondStartTime = System.nanoTime();
         long takenTime = System.nanoTime() - nanoSecondStartTime;
@@ -302,7 +247,7 @@ public class MainActivity extends AppCompatActivity {
         takenTime = System.nanoTime() - nanoSecondStartTime;
         System.out.println("JNI Time = " + takenTime);
 
-        ChaosMap.TestFixedMap();
+        ChaosMapInline.TestFixedMap();
     }
 
     @Override
@@ -339,3 +284,56 @@ public class MainActivity extends AppCompatActivity {
         return str;
     }
 }
+
+//wihtout trimming UV
+//                    byte[] byteArr = new byte[y.length * 2];
+//
+//                    System.out.println("Y Length : " + y.length);
+//                    System.out.println("U Length : " + u.length);
+//                    System.out.println("V Length : " + v.length);
+//                    for (int i = 0; i < (y.length) - 2; i++) {
+//                        if (i % 2 == 0) {
+//                            byteArr[i * 2] = y[i];
+//                            byteArr[i * 2 + 1] = u[i / 2];
+//                        } else {
+//                            byteArr[i * 2] = y[i];
+//                            byteArr[i * 2 + 1] = v[i / 2];
+//                        }
+//                    }
+//                    byteArr[y.length * 2 - 4] = y[y.length - 2];
+//                    byteArr[y.length * 2 - 3] = u[u.length / 2];
+//
+//                    byteArr[y.length * 2 - 2] = y[y.length - 1];
+//                    byteArr[y.length * 2 - 1] = v[v.length / 2];
+
+//Check for value pattern
+//                    for (int i=0;i<byteArr.length;){
+//                        if (byteArr[i]>0)
+//                            System.out.print(byteArr[i++] + " ");
+//                        else
+//                            i++;
+//                        i++;
+//                        //System.out.print(byteArr[i++] + " ");
+//                        if (byteArr[i]>0)
+//                            System.out.print(byteArr[i++] + " ");
+//                        else
+//                            i++;
+//                        i++;
+//                        System.out.println();
+//                    }
+
+//                    for (int i=0;i<byteArr.length;){
+//                        //System.out.print(byteArr[i++] + " ");
+//                        i++;
+//                        if (byteArr[i]<80 && byteArr[i]>-80)
+//                            System.out.print(byteArr[i++] + " ");
+//                        else
+//                            i++;
+//                        //System.out.print(byteArr[i++] + " ");
+//                        i++;
+//                        if (byteArr[i]<80 && byteArr[i]>-80)
+//                            System.out.print(byteArr[i++] + " ");
+//                        else
+//                            i++;
+//                        System.out.println();
+//                    }

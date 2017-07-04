@@ -7,7 +7,7 @@ import java.util.List;
  * Created by yeohw on 5/29/2017.qa
  */
 
-public class ChaosMap {
+public class ChaosMapInline {
     public static void TestFixedMap(){
         long elapsedTime;
         long startTime;
