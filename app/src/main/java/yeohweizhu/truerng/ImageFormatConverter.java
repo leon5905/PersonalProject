@@ -17,7 +17,6 @@ public class ImageFormatConverter {
     private static RenderScript sRenderScriptYuvToRgb;
     private static ScriptC_yuv420888 sYuv420;
 
-
     public static Bitmap YUV_420_888_toRGB(Image image, int width, int height, Context context){
         if (sRenderScriptYuvToRgb==null){
             sRenderScriptYuvToRgb =  RenderScript.create(context);

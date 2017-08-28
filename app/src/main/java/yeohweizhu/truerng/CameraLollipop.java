@@ -3,7 +3,6 @@ package yeohweizhu.truerng;
 import android.app.Service;
 import android.content.Context;
 import android.graphics.ImageFormat;
-import android.graphics.PixelFormat;
 import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
@@ -11,8 +10,6 @@ import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CaptureRequest;
-import android.hardware.camera2.CaptureResult;
-import android.hardware.camera2.DngCreator;
 import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
@@ -27,25 +24,21 @@ import android.util.SparseIntArray;
 import android.view.Surface;
 import android.view.WindowManager;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.ListIterator;
 
 /**
- * For API < 5.0 || API < Level 21
+ * For API > 5.0 || API > Level 21
  * Created by yeohw on 5/15/2017.
  */
 
 class CameraLollipop implements ICamera {
     private static final String TAG ="CameraLollipop";
-
-//    private static final int DEFAULT_WIDHT = 1280;
-//    private static final int DEFAULT_HEIGHT = 720;
 
     private long nanoSecondStartTime;
 
@@ -54,6 +47,9 @@ class CameraLollipop implements ICamera {
     private Context mContext;
 
     //Internal
+//    private List<ImageReader> imageReaderList;
+    private int mRequiredImageNumber = 2;
+    private int mCurrentImageCount=0;
     private ImageReader imageReader;
     private Handler backgroundHandler;
     private HandlerThread backgroundThread;
@@ -65,6 +61,7 @@ class CameraLollipop implements ICamera {
     private CameraCaptureSession cameraCaptureSession;
     private TotalCaptureResult captureResult;
     private Image captureImage;
+    private List<Image> mCaptureImageList;
     private SurfaceTexture mDummyPreview = new SurfaceTexture(1);
     private Surface mDummySurface = new Surface(mDummyPreview);
     private int dummyCount;
@@ -111,13 +108,23 @@ class CameraLollipop implements ICamera {
             cameraCharacteristics = manager.getCameraCharacteristics(backFacingCameraId);
 
             Size outputSize = getMaximumOutputSizes(cameraCharacteristics);
-            picWidth  = outputSize.getWidth(); //TODO change to desired resolution
-            picHeight = outputSize.getHeight(); //TODO change to desired resolution
+            picWidth  = outputSize.getWidth();
+            picHeight = outputSize.getHeight();
 
             imageFormat = getOutputFormat(manager.getCameraCharacteristics(backFacingCameraId));
 
-            imageReader = ImageReader.newInstance(picWidth, picHeight, imageFormat, 4);
+            mCaptureImageList = new ArrayList<>();
+
+            imageReader= ImageReader.newInstance(picWidth, picHeight, imageFormat, 4);
             imageReader.setOnImageAvailableListener(onImageAvailableListener, backgroundHandler);
+
+//            int burstImageNumber = 1;
+//            ImageReader reader;
+//            for (int i=0;i<burstImageNumber;++i){
+//                reader= ImageReader.newInstance(picWidth, picHeight, imageFormat, 4);
+//                reader.setOnImageAvailableListener(onImageAvailableListener, backgroundHandler);
+//                imageReaderList.add(reader);
+//            }
 
         } catch (CameraAccessException e) {
             e.printStackTrace();
@@ -129,8 +136,10 @@ class CameraLollipop implements ICamera {
     @Override
     public void takePicture() {
         dummyCount=0;
+        mCurrentImageCount=0;
         captureResult=null;
         captureImage=null;
+        mCaptureImageList.clear();
         openCamera();
     }
 
@@ -165,6 +174,9 @@ class CameraLollipop implements ICamera {
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     private void createCameraCaptureSession() {
         List<Surface> outputSurfaces = new LinkedList<>();
+//        for (ImageReader reader:imageReaderList){
+//            outputSurfaces.add(reader.getSurface());
+//        }
         outputSurfaces.add(imageReader.getSurface());
         outputSurfaces.add(mDummySurface);
 
@@ -202,7 +214,7 @@ class CameraLollipop implements ICamera {
                 @Override
                 public void onCaptureCompleted(CameraCaptureSession session, CaptureRequest request, TotalCaptureResult result) {
                     if (dummyCount==24){
-                        createCaptureRequest();
+                        createBurstCaptureRequest();
                     }
                     dummyCount++;
                 }
@@ -217,6 +229,7 @@ class CameraLollipop implements ICamera {
     private void createCaptureRequest() {
         try {
             CaptureRequest.Builder requestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
+//            requestBuilder.addTarget(imageReaderList.get(0).getSurface());
             requestBuilder.addTarget(imageReader.getSurface());
 
             // Focus
@@ -228,64 +241,60 @@ class CameraLollipop implements ICamera {
             int rotation = ((WindowManager) (mContext.getSystemService(Service.WINDOW_SERVICE))).getDefaultDisplay().getRotation();
             requestBuilder.set(CaptureRequest.JPEG_ORIENTATION, ORIENTATIONS.get(rotation));
 
-            cameraCaptureSession.capture(requestBuilder.build(), new CameraCaptureSession.CaptureCallback(){
-                @Override
-                public void onCaptureCompleted(CameraCaptureSession session, CaptureRequest request, @NonNull TotalCaptureResult result) {
-                    captureResult = result;
-                    if (captureImage!=null && captureImage.getFormat()==ImageFormat.RAW_SENSOR){
-//                        byte[] bytes = obtainDngByte(captureResult,captureImage);
-                        mCallback.onPictureTaken(captureImage);
-                        captureImage.close();
-                    }
-                }
-            }, null);
+            cameraCaptureSession.capture(requestBuilder.build(), null, null);
 
         } catch (CameraAccessException e) {
             e.printStackTrace();
         }
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    private void createBurstCaptureRequest(){
+        try {
+            CaptureRequest.Builder requestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
+            requestBuilder.addTarget(imageReader.getSurface());
+
+            // Focus
+            requestBuilder.set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO);
+//            requestBuilder.set(CaptureRequest.CONTROL_AE_MODE,CaptureRequest.CONTROL_AE_MODE_ON);
+//            requestBuilder.set(CaptureRequest.CONTROL_AWB_MODE,CaptureRequest.CONTROL_AWB_MODE_AUTO);
+
+            // Orientation
+            int rotation = ((WindowManager) (mContext.getSystemService(Service.WINDOW_SERVICE))).getDefaultDisplay().getRotation();
+            requestBuilder.set(CaptureRequest.JPEG_ORIENTATION, ORIENTATIONS.get(rotation));
+
+            List<CaptureRequest> captureRequestList = new ArrayList<>();
+
+            for (int i = 0; i< mRequiredImageNumber; ++i){
+                captureRequestList.add(requestBuilder.build());
+            }
+
+            cameraCaptureSession.captureBurst(captureRequestList, null, null);
+
+        } catch (CameraAccessException e) {
+            e.printStackTrace();
+        }
+    }
 
     //Once Capture Complete
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     private final ImageReader.OnImageAvailableListener onImageAvailableListener = new ImageReader.OnImageAvailableListener() {
         @Override
         public void onImageAvailable(ImageReader reader) {
-
+            ++mCurrentImageCount;
             captureImage = imageReader.acquireLatestImage();
-            if (captureImage.getFormat()==ImageFormat.RAW_SENSOR){
-                if (captureResult!=null) {
-//                    byte[] bytes = obtainDngByte(captureResult,captureImage);
-                    mCallback.onPictureTaken(captureImage);
-                    captureImage.close();
-                    captureImage=null;
-                }
-            }
-            else{
-                mCallback.onPictureTaken(captureImage);
+            mCaptureImageList.add(captureImage);
+
+            if (mCurrentImageCount== mRequiredImageNumber){
+                cameraDevice.close();
+                mCallback.onPictureTaken(mCaptureImageList.toArray(new Image[mCaptureImageList.size()]));
                 captureImage.close();
                 captureImage=null;
             }
 
-            //cameraDevice.close();
             cameraCaptureSession.close(); //TODO maybe 1 capture session no need close??
         }
     };
-
-    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-    private byte[] obtainDngByte(CaptureResult finalResult, Image finalImage){
-        DngCreator dngCreator = new DngCreator(cameraCharacteristics, finalResult);
-        ByteArrayOutputStream output = new ByteArrayOutputStream();
-        try {
-            dngCreator.writeImage(output, finalImage);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        byte[] bytes = output.toByteArray();
-        return bytes;
-    }
-
 
     //Get Maximum Supported Camera Sensor Capture Resolution
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
@@ -308,8 +317,8 @@ class CameraLollipop implements ICamera {
 
             @Override
             public int compare(Size size1, Size size2) {
-                int size1Value = size1.getHeight()+ size1.getWidth();
-                int size2Value = size2.getHeight()+size2.getWidth();
+                int size1Value = size1.getHeight()*size1.getWidth();
+                int size2Value = size2.getHeight()*size2.getWidth();
 
                 //In case they are equal, -1 will still be return, not so much of a deal in this case.
                 if (size1Value>size2Value){
@@ -321,6 +330,11 @@ class CameraLollipop implements ICamera {
             }
         });
 
+        ListIterator<Size> ltr = availableResolutions.listIterator();
+        System.out.print("Resolution Available : " );
+        while(ltr.hasNext()){
+            System.out.print(ltr.next() +" ");
+        }
         System.out.println("Maximum Resolution: H - " + maxRes.getHeight() + " , W - " +maxRes.getWidth());
 
         return maxRes;
@@ -328,27 +342,21 @@ class CameraLollipop implements ICamera {
 
     @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     private static int getOutputFormat(CameraCharacteristics cameraCharacteristics) {
-        //TODO remove this
-        if (true)
+        if (true) //Android promise to always support YUV_420_888
             return ImageFormat.YUV_420_888;
 
         StreamConfigurationMap streamConfigurationMap = cameraCharacteristics
                 .get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
 
         int[] formatArrays = streamConfigurationMap.getOutputFormats();
-        System.out.print("File Format Supported : ");
-        for (int i:formatArrays){
-            System.out.print(i+ " , ");
-        }
-        System.out.println();
 
         for (int i:formatArrays){
-            if (i == ImageFormat.RAW_SENSOR){
+            if (i == ImageFormat.YUV_420_888){
                 return i;
             }
         }
 
-        return ImageFormat.YUV_420_888;
+        return ImageFormat.JPEG;
     }
 }
 

@@ -13,12 +13,14 @@ import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
-import android.widget.ImageView;
+import android.widget.TextView;
 
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
     //Static Constant
@@ -32,10 +34,11 @@ public class MainActivity extends AppCompatActivity {
     private ICamera.PictureTakenCallBack mPictureTakenCallBack;
 
     //GUI
-    private ImageView sampleImageView;
+    private TextView mTextView;
 
     //Stopwatch
-    private long nanoSecondStartTime;
+    private long startTime;
+
 
     // Used to load the 'native-lib' library on application startup.
     static {
@@ -48,53 +51,34 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        mTextView = (TextView) this.findViewById(R.id.sample_text);
+        ((Button) this.findViewById(R.id.sample_button)).setOnClickListener(
+                new View.OnClickListener() {
+                    @Override
+                    public void onClick(View view) {
+                        startTime = System.currentTimeMillis();
+                        mTextView.setText("\nStart Capturing Picture");
+                        mCameraService.takePicture();
+                    }
+                }
+        );
+
         mPictureTakenCallBack = new ICamera.PictureTakenCallBack(){
             @Override
-            public void onPictureTaken(byte[] byteArr) {
-                long elapsedTime = System.currentTimeMillis() - nanoSecondStartTime;
-                System.out.println("DNG Nanosecond Taken: " + elapsedTime);
-
-                FileOutputStream fos = null;
-                try {
-                    fos = openFileOutput("abc",  Context.MODE_PRIVATE);
-                    fos.write(byteArr);
-                    fos.close();
-                    System.out.println("Save File Complete");
-                } catch (FileNotFoundException e) {
-                    e.printStackTrace();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-
-            @Override
             public void onPictureTaken(Image image) {
-                long elapsedTime = System.currentTimeMillis() - nanoSecondStartTime;
-                System.out.println("Raw Nanosecond Taken 1: " + elapsedTime);
+                long elapsedTime = System.currentTimeMillis() - startTime;
+                mTextView.append("\nEnd Capturing Picture : " + elapsedTime/1000.0);
 
                 Bitmap bitmap=null;
                 byte[] bytes=null;
                 int imageFormat = image.getFormat();
 
-                if ( imageFormat == ImageFormat.JPEG){
-                    ByteBuffer buffer = image.getPlanes()[0].getBuffer();
-                    bytes = new byte[buffer.remaining()];
-                    buffer.get(bytes);
-
-                    bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
-                    //Save pixel value to file
-                    int[] pixels = new int[bitmap.getWidth()*bitmap.getHeight()];
-                    bitmap.getPixels(pixels,0,bitmap.getWidth(),0,0,bitmap.getWidth(),bitmap.getHeight());
-
-                    byte[] byteArr= new byte[pixels.length*3];
-                    for(int i=0;i<pixels.length;i++){
-                        byteArr[i*3] =  (byte) ((pixels[i]>>16) & 0xFF);
-                        byteArr[i*3+1] = (byte) ((pixels[i]>>8) & 0xFF);
-                        byteArr[i*3+2]= (byte) ((pixels[i]) & 0xFF);
-                    }
-
+                if (imageFormat!=ImageFormat.YUV_420_888){
+                    throw new AssertionError();
                 }
-                else if (imageFormat == ImageFormat.YUV_420_888) {
+
+                if (imageFormat == ImageFormat.YUV_420_888) {
+
                     //bitmap = ImageFormatConverter.YUV_420_888_toRGB(image,image.getWidth(),image.getHeight(),getApplicationContext());
                     //Rotate YUV to correct orientation
                     //bitmap = ImageFormatConverter.RotateBitmap(bitmap,90);
@@ -111,111 +95,173 @@ public class MainActivity extends AppCompatActivity {
                     byte[] v = new byte[buffer.remaining()];
                     buffer.get(v);
 
-                    byte[] uTrimmed = new byte[u.length*7/8];
-                    byte[] vTrimmed = new byte[v.length*7/8];
+                    image.close();
 
-                    //Generate 7 byte out of 8 byte
-                    //Removing 7th bit
+                    int targetLength = u.length/2;
+                    byte[] uTrimmed = new byte[targetLength];
+                    byte[] vTrimmed = new byte[targetLength];
+                    byte[] yTrimmed = new byte[uTrimmed.length*2]; //double the length of uTrimmed
+
+                    mTextView.append("\nStart Preprocessing");
                     int trimmedIndex=0;
-                    for (int i=0;i<u.length;){
-                        if (u.length-i<8)
-                            break;
 
-                        int range=7;
-                        int offset=1;
-                        long bit64=0;
-                        long bit64_v=0;
+                    int j=0;
+//                    for (int i=0;i<targetLength*2;i+=2){
+//                        uTrimmed[trimmedIndex] = (byte) ( ( (u[i]&0b11110000) ^  ((u[i]<<4)&0b11110000) ) | ( ((u[i+1]>>4)&0b1111) ^  (u[i+1]&0b1111) ) );
+//                        vTrimmed[trimmedIndex] = (byte) ( ( (v[i]&0b11110000) ^  ((v[i]<<4)&0b11110000) ) | ( ((v[i+1]>>4)&0b1111) ^  (v[i+1]&0b1111) ) );
+//
+//                        yTrimmed[trimmedIndex*2] = (byte) ( ( (y[j]&0b11110000) ^  ((y[j]<<4)&0b11110000) ) | ( ((y[j+1]>>4)&0b1111) ^  (y[j+1]&0b1111) ) );
+//                        yTrimmed[trimmedIndex*2+1] = (byte) ( ( (y[j+2]&0b11110000) ^  ((y[j+2]<<4)&0b11110000) ) | ( ((y[j+3]>>4)&0b1111) ^  (y[j+3]&0b1111) ) );
+//
+//                        j+=4;
+//                        ++trimmedIndex;
+//                    }
 
-                        for (int j=0;j<8;j++){
-                            //System.out.println(Integer.toBinaryString((int) u[i]) + " asd " + Long.toBinaryString(((long) (u[i]&0b10000000 | (u[i]<<2>>>1)) ) << (range*8+offset)));
-                            bit64 |= (  ((long) (u[i]&0b10000000 | ((u[i]&0b00111111) <<1) ) ) << (range*8+offset) ) ;
-//                            System.out.println("asd: " + String.format("%8s", Integer.toBinaryString(u[i] & 0xFF)).replace(' ', '0'));
+                    for (int i=0;i<targetLength*2;i+=2){
+                        uTrimmed[trimmedIndex] = (byte) ( ( u[i]<<4 )&0xF0 |  (u[i+1])&0x0F  );
+                        vTrimmed[trimmedIndex] = (byte) ( ( ( v[i]<<4 )&0xF0 |  (v[i+1])&0x0F  ));
+                        yTrimmed[trimmedIndex*2] = (byte) ( ( ( y[j]<<4 )&0xF0 |  (y[j+1])&0x0F  ));
+                        yTrimmed[trimmedIndex*2+1] = (byte) ( ( ( y[j+2]<<4 )&0xF0 |  (y[j+3])&0x0F  ));
 
-                            bit64_v |= (  ((long) (v[i]&0b10000000 | ((v[i]&0b00111111) <<1) ) ) << (range*8+offset) ) ;
-                            range--;
-                            offset++;
-                            i++;
-                        }
-
-//                        System.out.println("58 bit asd: " + Long.toBinaryString(bit64) );
-
-                        for (int byteNum=7;byteNum>0;byteNum--){
-                            uTrimmed[trimmedIndex]= (byte) ( (bit64>> ( 8*(byteNum) ))&0xff );
-                            //System.out.println("Byte asd: ? " + uTrimmed[trimmedIndex] + " ?? " +  String.format("%8s", Integer.toBinaryString(uTrimmed[trimmedIndex]  & 0xFF)).replace(' ', '0'));
-
-                            vTrimmed[trimmedIndex]= (byte) ((bit64_v>> ( 8*(byteNum) ))&0xff);
-
-                            trimmedIndex++;
-                        }
+                        j+=4;
+                        ++trimmedIndex;
                     }
+
+                    elapsedTime = System.currentTimeMillis() - startTime;
+                    mTextView.append("\nEnd Preprocssing: " + elapsedTime/1000.0);
 
                     byte[] byteArr = new byte[uTrimmed.length*4];
+                    byte[] byteArrNoTrimmed = new byte[uTrimmed.length*4];
 
+                    mTextView.append("\nStart Preprocssing 2:");
+                    //Interlace UV like this, Y U Y V Y U Y V...
                     for (int i = 0; i < (uTrimmed.length*2); i++) {
                         if (i % 2 == 0) {
-                            byteArr[i * 2] = y[i];
+                            byteArr[i * 2] = yTrimmed[i];
                             byteArr[i * 2 + 1] = uTrimmed[i / 2];
+
+                            byteArrNoTrimmed[i * 2] = y[i];
+                            byteArrNoTrimmed[i * 2 + 1] = u[i / 2];
                         } else {
-                            byteArr[i * 2] = y[i];
+                            byteArr[i * 2] = yTrimmed[i];
                             byteArr[i * 2 + 1] = vTrimmed[i / 2];
+
+                            byteArrNoTrimmed[i * 2] = y[i];
+                            byteArrNoTrimmed[i * 2 + 1] = v[i / 2];
                         }
                     }
+                    elapsedTime = System.currentTimeMillis() - startTime;
+                    mTextView.append("\nEnd Preprocssing 2: " + elapsedTime/1000.0);
 
-                    byte[] finalByteArr = Postprocess.Postprocess(byteArr);
+                    //Post Process
+                    mTextView.append("\nStart Processing: ");
+                    byte[] finalByteArr = ChaosTrueRNG.Postprocess(byteArr);
+                    elapsedTime = System.currentTimeMillis() - startTime;
+                    mTextView.append("\nEnd Postprocessing: " + elapsedTime/1000.0);
 
+                    mTextView.append("\nStart Processing 2: ");
+                    byte[] finalByteNoTrimmed = new byte[1];
+                    finalByteNoTrimmed = ChaosTrueRNG.Postprocess(byteArrNoTrimmed);
+                    elapsedTime = System.currentTimeMillis() - startTime;
+                    mTextView.append("\nEnd Postprocessing 2: " + elapsedTime/1000.0);
+
+                    //Save to File
                     FileOutputStream fos = null;
                     try {
                         fos = openFileOutput("abc", Context.MODE_PRIVATE);
-                        fos.write(byteArr);
+                        fos.write(finalByteNoTrimmed);
                         fos.close();
 
                         fos = openFileOutput("abc_post", Context.MODE_PRIVATE);
                         fos.write(finalByteArr);
                         fos.close();
                         System.out.println("Save File Complete");
+                        mTextView.append("\nSaved: ");
                     } catch (FileNotFoundException e) {
                         e.printStackTrace();
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
-
                 }
-
-                //TODO try to get pixel
-                if (bytes!=null)
-                    System.out.println("Byte Array Length : " + bytes.length);
-
-                sampleImageView.setImageBitmap(bitmap);
-
-
             }
 
             @Override
+            //Burst Request
+            public void onPictureTaken(Image[] imageArr) {
+                long elapsedTime = System.currentTimeMillis() - startTime;
+                mTextView.append("\nEnd Capturing Picture : " + elapsedTime/1000.0);
+
+                List<byte[]> yList = new ArrayList<>();
+                List<byte[]> uList = new ArrayList<>();
+                List<byte[]> vList = new ArrayList<>();
+
+                for (Image image:imageArr){
+                    Image.Plane[] planes = image.getPlanes();
+                    ByteBuffer buffer = planes[0].getBuffer();
+                    byte[] y = new byte[buffer.remaining()];
+                    buffer.get(y);
+
+                    buffer = planes[1].getBuffer();
+                    byte[] u = new byte[buffer.remaining()];
+                    buffer.get(u);
+
+                    buffer = planes[2].getBuffer();
+                    byte[] v = new byte[buffer.remaining()];
+                    buffer.get(v);
+
+                    yList.add(y);
+                    uList.add(u);
+                    vList.add(v);
+
+                    image.close();
+                }
+
+                byte[] result = ChaosTrueRNG.Preprocess(yList,uList,vList);
+                elapsedTime = System.currentTimeMillis() - startTime;
+                mTextView.append("\nEnd PreProcess 1 : " + elapsedTime/1000.0);
+
+                result = ChaosTrueRNG.PostprocessParallel(result);
+                elapsedTime = System.currentTimeMillis() - startTime;
+                mTextView.append("\nEnd PostProcess 1 : " + elapsedTime/1000.0);
+
+//                byte[] noTrimResult = ChaosTrueRNG.PreprocessNoTrimmed(yList,uList,vList);
+//                elapsedTime = System.currentTimeMillis() - startTime;
+//                mTextView.append("\nEnd PreProcess 2 : " + elapsedTime/1000.0);
+//
+//                noTrimResult = ChaosTrueRNG.Postprocess(noTrimResult);
+//                elapsedTime = System.currentTimeMillis() - startTime;
+//                mTextView.append("\nEnd PostProcess 2 : " + elapsedTime/1000.0);
+
+                //Save to File
+                FileOutputStream fos = null;
+                try {
+//                    fos = openFileOutput("abc", Context.MODE_PRIVATE);
+//                    fos.write(noTrimResult);
+//                    fos.close();
+
+                    fos = openFileOutput("abc_post", Context.MODE_PRIVATE);
+                    fos.write(result);
+                    fos.close();
+                    System.out.println("Save File Complete");
+                    mTextView.append("\nSaved: ");
+                } catch (FileNotFoundException e) {
+                    e.printStackTrace();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            @Override
+            //For <Non lollipop / JPEG
             public void onPictureTaken(byte[] image, int imageFormat, int width, int height) {
                 if (imageFormat==ImageFormat.JPEG){
                     Bitmap bitmap = BitmapFactory.decodeByteArray(image, 0, image.length);
-                    sampleImageView.setImageBitmap(bitmap);
-                }
-                else if (imageFormat==ImageFormat.RAW_SENSOR){
-
                 }
             }
         };
 
         //Instantiate Service
         mCameraService = new CameraService(getApplicationContext(), mPictureTakenCallBack);
-
-        //Setup GUI Reference
-        sampleImageView = (ImageView) this.findViewById(R.id.sample_image);
-        ((Button) this.findViewById(R.id.sample_button)).setOnClickListener(
-                new View.OnClickListener() {
-                    @Override
-                    public void onClick(View view) {
-                        nanoSecondStartTime = System.currentTimeMillis();
-                        mCameraService.takePicture();
-                    }
-                }
-        );
 
         int permissionCheck = ContextCompat.checkSelfPermission(this,
                 Manifest.permission.CAMERA);
@@ -229,25 +275,20 @@ public class MainActivity extends AppCompatActivity {
         // Example of a call to a native method
         // TextView tv = (TextView) findViewById(R.id.sample_text);
         // tv.setText(stringFromJNI());
-//        ChaosMapInline.Test();
-//        ChaosMapInline.TestFixed();
-//        ChaosMapInline.TestFixedMap();
 
-        nanoSecondStartTime = System.nanoTime();
-        long takenTime = System.nanoTime() - nanoSecondStartTime;
-        System.out.println("Empty Time = " + takenTime);
-
-        nanoSecondStartTime = System.nanoTime();
-        this.stringFromJava();
-        takenTime = System.nanoTime() - nanoSecondStartTime;
-        System.out.println("Java Time = " + takenTime);
-
-        nanoSecondStartTime = System.nanoTime();
-        this.stringFromJNI();
-        takenTime = System.nanoTime() - nanoSecondStartTime;
-        System.out.println("JNI Time = " + takenTime);
-
-        ChaosMapInline.TestFixedMap();
+//        nanoSecondStartTime = System.nanoTime();
+//        long takenTime = System.nanoTime() - nanoSecondStartTime;
+//        System.out.println("Empty Time = " + takenTime);
+//
+//        nanoSecondStartTime = System.nanoTime();
+//        this.stringFromJava();
+//        takenTime = System.nanoTime() - nanoSecondStartTime;
+//        System.out.println("Java Time = " + takenTime);
+//
+//        nanoSecondStartTime = System.nanoTime();
+//        this.stringFromJNI();
+//        takenTime = System.nanoTime() - nanoSecondStartTime;
+//        System.out.println("JNI Time = " + takenTime);
     }
 
     @Override
@@ -284,56 +325,3 @@ public class MainActivity extends AppCompatActivity {
         return str;
     }
 }
-
-//wihtout trimming UV
-//                    byte[] byteArr = new byte[y.length * 2];
-//
-//                    System.out.println("Y Length : " + y.length);
-//                    System.out.println("U Length : " + u.length);
-//                    System.out.println("V Length : " + v.length);
-//                    for (int i = 0; i < (y.length) - 2; i++) {
-//                        if (i % 2 == 0) {
-//                            byteArr[i * 2] = y[i];
-//                            byteArr[i * 2 + 1] = u[i / 2];
-//                        } else {
-//                            byteArr[i * 2] = y[i];
-//                            byteArr[i * 2 + 1] = v[i / 2];
-//                        }
-//                    }
-//                    byteArr[y.length * 2 - 4] = y[y.length - 2];
-//                    byteArr[y.length * 2 - 3] = u[u.length / 2];
-//
-//                    byteArr[y.length * 2 - 2] = y[y.length - 1];
-//                    byteArr[y.length * 2 - 1] = v[v.length / 2];
-
-//Check for value pattern
-//                    for (int i=0;i<byteArr.length;){
-//                        if (byteArr[i]>0)
-//                            System.out.print(byteArr[i++] + " ");
-//                        else
-//                            i++;
-//                        i++;
-//                        //System.out.print(byteArr[i++] + " ");
-//                        if (byteArr[i]>0)
-//                            System.out.print(byteArr[i++] + " ");
-//                        else
-//                            i++;
-//                        i++;
-//                        System.out.println();
-//                    }
-
-//                    for (int i=0;i<byteArr.length;){
-//                        //System.out.print(byteArr[i++] + " ");
-//                        i++;
-//                        if (byteArr[i]<80 && byteArr[i]>-80)
-//                            System.out.print(byteArr[i++] + " ");
-//                        else
-//                            i++;
-//                        //System.out.print(byteArr[i++] + " ");
-//                        i++;
-//                        if (byteArr[i]<80 && byteArr[i]>-80)
-//                            System.out.print(byteArr[i++] + " ");
-//                        else
-//                            i++;
-//                        System.out.println();
-//                    }

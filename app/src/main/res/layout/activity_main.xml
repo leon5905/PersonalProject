@@ -15,7 +15,7 @@
         android:id="@+id/sample_text"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Hello World!"/>
+        android:text=""/>
 
     <ImageView
         android:id="@+id/sample_image"
@@ -26,5 +26,6 @@
         android:id="@+id/sample_button"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
         android:text="Take Picture"/>
 </RelativeLayout>
