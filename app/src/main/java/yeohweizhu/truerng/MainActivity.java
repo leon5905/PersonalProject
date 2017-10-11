@@ -1,7 +1,9 @@
 package yeohweizhu.truerng;
 
 import android.Manifest;
+import android.app.Dialog;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -9,10 +11,16 @@ import android.graphics.ImageFormat;
 import android.media.Image;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.support.v7.widget.Toolbar;
+import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
+import android.widget.NumberPicker;
 import android.widget.TextView;
 
 import java.io.FileNotFoundException;
@@ -36,9 +44,11 @@ public class MainActivity extends AppCompatActivity {
     //GUI
     private TextView mTextView;
 
-    //Stopwatch
-    private long startTime;
-
+    //All other information
+    private long startTime; //Stopwatch
+    private int capture_iter_num=240;//1920 times - 300 burst //How many time to capture new photo... Primaryly use to gather data for experiement purposes...
+    private int completed_iter_num=0;
+    private List<Byte> finalByteList = new ArrayList<>();
 
     // Used to load the 'native-lib' library on application startup.
     static {
@@ -51,6 +61,9 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        Toolbar myToolbar = (Toolbar) findViewById(R.id.toolbar);
+        setSupportActionBar(myToolbar);
+
         mTextView = (TextView) this.findViewById(R.id.sample_text);
         ((Button) this.findViewById(R.id.sample_button)).setOnClickListener(
                 new View.OnClickListener() {
@@ -58,6 +71,7 @@ public class MainActivity extends AppCompatActivity {
                     public void onClick(View view) {
                         startTime = System.currentTimeMillis();
                         mTextView.setText("\nStart Capturing Picture");
+
                         mCameraService.takePicture();
                     }
                 }
@@ -66,6 +80,9 @@ public class MainActivity extends AppCompatActivity {
         mPictureTakenCallBack = new ICamera.PictureTakenCallBack(){
             @Override
             public void onPictureTaken(Image image) {
+                if (true)
+                    throw new AssertionError(); //This function is deprecated
+
                 long elapsedTime = System.currentTimeMillis() - startTime;
                 mTextView.append("\nEnd Capturing Picture : " + elapsedTime/1000.0);
 
@@ -74,7 +91,7 @@ public class MainActivity extends AppCompatActivity {
                 int imageFormat = image.getFormat();
 
                 if (imageFormat!=ImageFormat.YUV_420_888){
-                    throw new AssertionError();
+                    throw new AssertionError(); //Unexpected
                 }
 
                 if (imageFormat == ImageFormat.YUV_420_888) {
@@ -187,7 +204,7 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             //Burst Request
-            public void onPictureTaken(Image[] imageArr) {
+            public void onPictureTaken(byte[][][] yuv) {
                 long elapsedTime = System.currentTimeMillis() - startTime;
                 mTextView.append("\nEnd Capturing Picture : " + elapsedTime/1000.0);
 
@@ -195,52 +212,32 @@ public class MainActivity extends AppCompatActivity {
                 List<byte[]> uList = new ArrayList<>();
                 List<byte[]> vList = new ArrayList<>();
 
-                for (Image image:imageArr){
-                    Image.Plane[] planes = image.getPlanes();
-                    ByteBuffer buffer = planes[0].getBuffer();
-                    byte[] y = new byte[buffer.remaining()];
-                    buffer.get(y);
-
-                    buffer = planes[1].getBuffer();
-                    byte[] u = new byte[buffer.remaining()];
-                    buffer.get(u);
-
-                    buffer = planes[2].getBuffer();
-                    byte[] v = new byte[buffer.remaining()];
-                    buffer.get(v);
-
-                    yList.add(y);
-                    uList.add(u);
-                    vList.add(v);
-
-                    image.close();
+                for (byte[][] byteArrayList:yuv){
+                    yList.add(byteArrayList[0]);
+                    uList.add(byteArrayList[1]);
+                    vList.add(byteArrayList[2]);
                 }
 
+                //Original
+                mTextView.append("\nStart PreProcess 1 : " + elapsedTime/1000.0);
                 byte[] result = ChaosTrueRNG.Preprocess(yList,uList,vList);
                 elapsedTime = System.currentTimeMillis() - startTime;
                 mTextView.append("\nEnd PreProcess 1 : " + elapsedTime/1000.0);
 
-                result = ChaosTrueRNG.PostprocessParallel(result);
+                startTime = System.currentTimeMillis();
+                byte[] postprocessResult = ChaosTrueRNG.PostprocessParallel(result);
                 elapsedTime = System.currentTimeMillis() - startTime;
-                mTextView.append("\nEnd PostProcess 1 : " + elapsedTime/1000.0);
-
-//                byte[] noTrimResult = ChaosTrueRNG.PreprocessNoTrimmed(yList,uList,vList);
-//                elapsedTime = System.currentTimeMillis() - startTime;
-//                mTextView.append("\nEnd PreProcess 2 : " + elapsedTime/1000.0);
-//
-//                noTrimResult = ChaosTrueRNG.Postprocess(noTrimResult);
-//                elapsedTime = System.currentTimeMillis() - startTime;
-//                mTextView.append("\nEnd PostProcess 2 : " + elapsedTime/1000.0);
+                mTextView.append("\nEnd PostProcess 1 : " + elapsedTime / 1000.0);
 
                 //Save to File
                 FileOutputStream fos = null;
                 try {
-//                    fos = openFileOutput("abc", Context.MODE_PRIVATE);
-//                    fos.write(noTrimResult);
-//                    fos.close();
+//                        fos = openFileOutput("abc_" + i, Context.MODE_PRIVATE);
+//                        fos.write(result);
+//                        fos.close();
 
                     fos = openFileOutput("abc_post", Context.MODE_PRIVATE);
-                    fos.write(result);
+                    fos.write(postprocessResult);
                     fos.close();
                     System.out.println("Save File Complete");
                     mTextView.append("\nSaved: ");
@@ -249,6 +246,51 @@ public class MainActivity extends AppCompatActivity {
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
+
+                //Non-Value Analysis
+//                byte[] result = new byte[0];
+//                for (int i=0;i< yList.size();i+=2) {
+//                    result = ChaosTrueRNG.Preprocess(yList.subList(i, i + 2), uList.subList(i, i + 2), vList.subList(i, i + 2));
+//                    elapsedTime = System.currentTimeMillis() - startTime;
+//
+//                    startTime = System.currentTimeMillis();
+//                    byte[] postprocessResult = ChaosTrueRNG.PostprocessParallel(result);
+//                    elapsedTime = System.currentTimeMillis() - startTime;
+//
+//                    for (int j=0;j<4;j++){
+//                        finalByteList.add(postprocessResult[j]);
+//                    }
+//                }
+
+//                completed_iter_num++;
+//                if (completed_iter_num<capture_iter_num){
+//                    //Continue to take
+//                    mTextView.setText("Iter Number : " + completed_iter_num);
+//                    System.out.println("Iter Number : " + completed_iter_num);
+//                    mCameraService.takePicture();
+//                }
+//                else{
+//                    //Save to File
+//                    FileOutputStream fos = null;
+//                    try {
+//                        fos = openFileOutput("abc_post", Context.MODE_PRIVATE);
+//                        byte[] finalByteArray = new byte[finalByteList.size()];
+//
+//                        int counter =0;
+//                        for (byte b:finalByteList){
+//                            finalByteArray[counter++] = b;
+//                        }
+//
+//                        fos.write(finalByteArray);
+//                        fos.close();
+//                        System.out.println("Save File Complete");
+//                        mTextView.append("\nSaved: ");
+//                    } catch (FileNotFoundException e) {
+//                        e.printStackTrace();
+//                    } catch (IOException e) {
+//                        e.printStackTrace();
+//                    }
+//                }
             }
 
             @Override
@@ -289,6 +331,52 @@ public class MainActivity extends AppCompatActivity {
 //        this.stringFromJNI();
 //        takenTime = System.nanoTime() - nanoSecondStartTime;
 //        System.out.println("JNI Time = " + takenTime);
+    }
+
+    public boolean onCreateOptionsMenu(Menu menu) {
+        // Inflate the menu; this adds items to the action bar if it is present.
+        getMenuInflater().inflate(R.menu.menu_res, menu);
+        return true;
+    }
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        switch (item.getItemId()) {
+            case R.id.menu_capture_iter_num:
+                final AlertDialog.Builder d = new AlertDialog.Builder(this);
+                LayoutInflater inflater = this.getLayoutInflater();
+                View dialogView = inflater.inflate(R.layout.number_picker, null);
+                d.setTitle("Capture Number");
+                d.setMessage("Select number of capture (result will be concatenated).\n\nCurrent Iter : " + capture_iter_num);
+                d.setView(dialogView);
+                final NumberPicker numberPicker = (NumberPicker) dialogView.findViewById(R.id.dialog_number_picker);
+                numberPicker.setMaxValue(200);
+                numberPicker.setMinValue(1);
+                numberPicker.setWrapSelectorWheel(false);
+                numberPicker.setOnValueChangedListener(new NumberPicker.OnValueChangeListener() {
+                    @Override
+                    public void onValueChange(NumberPicker numberPicker, int i, int i1) {
+
+                    }
+                });
+                d.setPositiveButton("Done", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialogInterface, int i) {
+                        capture_iter_num = numberPicker.getValue();
+                    }
+                });
+                d.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialogInterface, int i) {
+
+                    }
+                });
+                AlertDialog alertDialog = d.create();
+                alertDialog.show();
+            default:
+                // If we got here, the user's action was not recognized.
+                // Invoke the superclass to handle it.
+                return super.onOptionsItemSelected(item);
+        }
     }
 
     @Override

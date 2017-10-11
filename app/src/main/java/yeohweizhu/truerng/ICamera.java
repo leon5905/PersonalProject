@@ -15,7 +15,7 @@ public interface ICamera {
         //format as in android.graphics ImageFormat int classifier
         //byte[] data can be null
         void onPictureTaken(Image image);
-        void onPictureTaken(Image[] imageArr);
+        void onPictureTaken(byte[][][] yuv);
         void onPictureTaken(byte[] image, int imageFormat, int width,int height); //For <5.0 Lollipop
     }
 }

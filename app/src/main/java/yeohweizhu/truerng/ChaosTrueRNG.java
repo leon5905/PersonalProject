@@ -61,11 +61,7 @@ public class ChaosTrueRNG {
     public static byte[] PostprocessParallel(byte[] byteArr){
         //Prep for thread creation
         int numberOfCores =  Helper.GetNumberOfCores();
-        if (numberOfCores==1){
-            return Postprocess(byteArr);
-        }
-
-//        System.out.println(GetNumberOfCores());
+        numberOfCores=5; //Testing implementation //Should be removed at release
 
         //Postprocess preparation - Divide (Group) byte into group of 4 (int32)
         int[] valueList = new int[byteArr.length/4]; //Int32
@@ -93,25 +89,19 @@ public class ChaosTrueRNG {
 
         //Worker
         int workerSize = doubleValueList.length/numberOfCores;
-
         int workerStartPos =0;
-        int workerEndLength=workerSize;
+        int workerEndLength=0; //Initialze, will be set to appropriate length at loop
 
-        Thread[] threadArray = new Thread[numberOfCores-1];
+        Thread[] threadArray = new Thread[numberOfCores];
         for (int i=0;i<numberOfCores;i++){
             if(i==numberOfCores-1) //Last core process the remaining
                 workerEndLength = doubleValueList.length;
             else
                 workerEndLength+=workerSize;
 
-            if (i==numberOfCores-1){
-                new PostProcessRunnable(workerStartPos, workerEndLength, min, max, valueList, doubleValueList, result).run();
-            }
-            else {
-                Thread thread = (new Thread(new PostProcessRunnable(workerStartPos, workerEndLength, min, max, valueList, doubleValueList, result)));
-                thread.start();
-                threadArray[i] = thread;
-            }
+            Thread thread = (new Thread(new PostProcessRunnable(workerStartPos, workerEndLength, min, max, valueList, doubleValueList, result)));
+            thread.start();
+            threadArray[i] = thread;
 
             workerStartPos+=workerSize;
         }
@@ -132,7 +122,7 @@ public class ChaosTrueRNG {
         int[] valueList;
         double[] doubleValueList;
         byte[] computedArr;
-        int start,endLength; //Start Index and End Index;
+        int start,endLength; //Start Index
         double diff;
         long min,max;
 
@@ -151,7 +141,7 @@ public class ChaosTrueRNG {
 
         @Override
         public void run() {
-            int numStateCCML = 8;
+            final int numStateCCML = 6;
             double[] num = new double[numStateCCML];
             double [] numQuaterTent = new double[numStateCCML];
 
@@ -164,30 +154,24 @@ public class ChaosTrueRNG {
                 num[3] = ((double)(valueList[i+3]-min))*(diff);
                 num[4] = ((double)(valueList[i+4]-min))*(diff);
                 num[5] = ((double)(valueList[i+5]-min))*(diff);
-                num[6] = ((double)(valueList[i+6]-min))*(diff);
-                num[7] = ((double)(valueList[i+7]-min))*(diff);
 
                 //Main diffusion loop
-                for (int j=0;j<numStateCCML/2;j++) { //Number of iteration = l/2
+                int loopStateComplete = numStateCCML/2;
+                for (int j=0;j<loopStateComplete;j++) { //Number of iteration = l/2
                     //Precompute quater since it will be use twice
-                    numQuaterTent[0] =  0.25*LogisticMap(num[0]);
-                    numQuaterTent[1] =  0.25*LogisticMap(num[1]);
-                    numQuaterTent[2] =  0.25*LogisticMap(num[2]);
-                    numQuaterTent[3] =  0.25*LogisticMap(num[3]);
-                    numQuaterTent[4] =  0.25*LogisticMap(num[4]);
-                    numQuaterTent[5] =  0.25*LogisticMap(num[5]);
-                    numQuaterTent[6] =  0.25*LogisticMap(num[6]);
-                    numQuaterTent[7] =  0.25*LogisticMap(num[7]);
+                    numQuaterTent[0] =  0.25*LogisticMapRunnable(num[0]);
+                    numQuaterTent[1] =  0.25*LogisticMapRunnable(num[1]);
+                    numQuaterTent[2] =  0.25*LogisticMapRunnable(num[2]);
+                    numQuaterTent[3] =  0.25*LogisticMapRunnable(num[3]);
+                    numQuaterTent[4] =  0.25*LogisticMapRunnable(num[4]);
+                    numQuaterTent[5] =  0.25*LogisticMapRunnable(num[5]);
 
-
-                    num[0] = 0.5*LogisticMap(num[0]) + numQuaterTent[1] + numQuaterTent[7];
-                    num[1] = 0.5*LogisticMap(num[1]) + numQuaterTent[2] + numQuaterTent[0];
-                    num[2] = 0.5*LogisticMap(num[2]) + numQuaterTent[3] + numQuaterTent[1];
-                    num[3] = 0.5*LogisticMap(num[3]) + numQuaterTent[4] + numQuaterTent[2];
-                    num[4] = 0.5*LogisticMap(num[4]) + numQuaterTent[5] + numQuaterTent[3];
-                    num[5] = 0.5*LogisticMap(num[5]) + numQuaterTent[6] + numQuaterTent[4];
-                    num[6] = 0.5*LogisticMap(num[6]) + numQuaterTent[7] + numQuaterTent[5];
-                    num[7] = 0.5*LogisticMap(num[7]) + numQuaterTent[0] + numQuaterTent[6];
+                    num[0] = numQuaterTent[1] + numQuaterTent[5] + 0.5*LogisticMapRunnable(num[0]);
+                    num[1] = numQuaterTent[2] + numQuaterTent[0] + 0.5*LogisticMapRunnable(num[1]);
+                    num[2] = numQuaterTent[3] + numQuaterTent[1] + 0.5*LogisticMapRunnable(num[2]);
+                    num[3] = numQuaterTent[4] + numQuaterTent[2] + 0.5*LogisticMapRunnable(num[3]);
+                    num[4] = numQuaterTent[5] + numQuaterTent[3] + 0.5*LogisticMapRunnable(num[4]);
+                    num[5] = numQuaterTent[0] + numQuaterTent[4] + 0.5*LogisticMapRunnable(num[5]);
                 }
 
                 //Record down converted double
@@ -197,10 +181,47 @@ public class ChaosTrueRNG {
                 doubleValueList[i+3] = num[3];
                 doubleValueList[i+4] = num[4];
                 doubleValueList[i+5] = num[5];
-                doubleValueList[i+6] = num[6];
-                doubleValueList[i+7] = num[7];
+
+                //TODO dont break!!
+//                break;
             }
 
+            //Take care of the rest
+            int counter=0;
+            int indexCounter=loopEnd;
+            while(indexCounter<endLength){
+                num[counter] = ((double)(valueList[indexCounter]-min))*(diff);
+                indexCounter++;
+                counter++;
+            }
+            while (counter<numStateCCML){
+                num[counter] =((double)(valueList[counter]-min))*(diff); //Reuse front number
+                counter++;
+            }
+            //Main diffusion loop
+            for (int j=0;j<numStateCCML/2;j++) {
+                //Precompute quater since it will be use twice
+                numQuaterTent[0] =  0.25*LogisticMapRunnable(num[0]);
+                numQuaterTent[1] =  0.25*LogisticMapRunnable(num[1]);
+                numQuaterTent[2] =  0.25*LogisticMapRunnable(num[2]);
+                numQuaterTent[3] =  0.25*LogisticMapRunnable(num[3]);
+                numQuaterTent[4] =  0.25*LogisticMapRunnable(num[4]);
+                numQuaterTent[5] =  0.25*LogisticMapRunnable(num[5]);
+                num[0] = numQuaterTent[1] + numQuaterTent[5] + 0.5*LogisticMapRunnable(num[0]) ;
+                num[1] = numQuaterTent[2] + numQuaterTent[0] + 0.5*LogisticMapRunnable(num[1]) ;
+                num[2] = numQuaterTent[3] + numQuaterTent[1] + 0.5*LogisticMapRunnable(num[2]) ;
+                num[3] = numQuaterTent[4] + numQuaterTent[2] + 0.5*LogisticMapRunnable(num[3]) ;
+                num[4] = numQuaterTent[5] + numQuaterTent[3] + 0.5*LogisticMapRunnable(num[4]) ;
+                num[5] = numQuaterTent[0] + numQuaterTent[4] + 0.5*LogisticMapRunnable(num[5]) ;
+            }
+            counter=0;
+            while(loopEnd<endLength){
+                doubleValueList[loopEnd] = num[counter];
+                loopEnd++;
+                counter++;
+            }
+
+            //Final Result Conversion
             for (int i=start;i<endLength;i++) {
                 //XOR
                 double conversionNum = doubleValueList[i];
@@ -211,8 +232,135 @@ public class ChaosTrueRNG {
                 computedArr[i * 4] = (byte) (intNum >>> 24 & 0xff);
             }
         }
+
+        private int switchCase;
+        private double LogisticMapRunnable(double initValue){ //Logistic Map
+            if (initValue<=0)
+                initValue=0.01;
+
+            double controlParameter;
+
+            //Seven Cases
+            switch (switchCase){
+                case 0:
+                    controlParameter=3.99;
+                    switchCase = 1;
+                    break;
+                case 1:
+                    controlParameter=3.98;
+                    switchCase = 2;
+                    break;
+                case 2:
+                    controlParameter=3.999;
+                    switchCase = 3;
+                    break;
+                case 3:
+                    controlParameter=3.96;
+                    switchCase = 4;
+                    break;
+                case 4:
+                    controlParameter=3.996;
+                    switchCase = 5;
+                    break;
+                case 5:
+                    controlParameter=3.97;
+                    switchCase = 6;
+                    break;
+                case 6:
+                    controlParameter=3.995;
+                    switchCase = 0;
+                    break;
+//                case 7:
+//                    controlParameter=3.992;
+//                    switchCase = 8;
+//                    break;
+//                case 8:
+//                    controlParameter=3.991;
+//                    switchCase= 9;
+//                    break;
+//                case 9:
+//                    controlParameter=3.993;
+//                    switchCase= 10;
+//                    break;
+//                case 10:
+//                    controlParameter=3.997;
+//                    switchCase= 11;
+//                    break;
+//                case 11:
+//                    controlParameter=3.989;
+//                    switchCase= 12;
+//                    break;
+//                case 12:
+//                    controlParameter=3.987;
+//                    switchCase= 0;
+//                    break;
+                default:
+                    controlParameter=3.983;
+            }
+
+            double returnValue = initValue;
+
+            //50 Times
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+            returnValue = ( controlParameter*returnValue*(1-returnValue));
+
+            return returnValue;
+        }
     }
 
+    //Desinged for single thread
     public static byte[] Postprocess(byte[] byteArr){
         int[] valueList = new int[byteArr.length/4]; //Int32
         int valueListLength = byteArr.length - (byteArr.length%4);
@@ -310,16 +458,15 @@ public class ChaosTrueRNG {
         return result;
     }
 
-    public static double LogisticMap(double initValue){ //Logistic Map
+    private static double LogisticMap(double initValue){ //Logistic Map
         if (initValue<=0)
             initValue=0.01;
 
-        double controlParameter=3.99;
-//        int iterNum=50;
+        double controlParameter =3.99;
 
         double returnValue = initValue;
 
-        //50 times
+        //53 times
         //10 batch
         returnValue = ( controlParameter*returnValue*(1-returnValue));
         returnValue = ( controlParameter*returnValue*(1-returnValue));
@@ -387,8 +534,8 @@ public class ChaosTrueRNG {
         return returnValue;
     }
 
-
-    public static double TentMap(double initValue){
+    //LogisticMap proves to be better performance wise..
+    private static double TentMap(double initValue){
         int iterNum = 50;
         double controlParameter=1.99;
 

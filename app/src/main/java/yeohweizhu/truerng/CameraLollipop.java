@@ -24,6 +24,7 @@ import android.util.SparseIntArray;
 import android.view.Surface;
 import android.view.WindowManager;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -48,7 +49,7 @@ class CameraLollipop implements ICamera {
 
     //Internal
 //    private List<ImageReader> imageReaderList;
-    private int mRequiredImageNumber = 2;
+    private int mRequiredImageNumber = 2; //Burst Number = 300
     private int mCurrentImageCount=0;
     private ImageReader imageReader;
     private Handler backgroundHandler;
@@ -61,7 +62,7 @@ class CameraLollipop implements ICamera {
     private CameraCaptureSession cameraCaptureSession;
     private TotalCaptureResult captureResult;
     private Image captureImage;
-    private List<Image> mCaptureImageList;
+    private byte[][][] mCaptureImagePlaneList;
     private SurfaceTexture mDummyPreview = new SurfaceTexture(1);
     private Surface mDummySurface = new Surface(mDummyPreview);
     private int dummyCount;
@@ -113,7 +114,7 @@ class CameraLollipop implements ICamera {
 
             imageFormat = getOutputFormat(manager.getCameraCharacteristics(backFacingCameraId));
 
-            mCaptureImageList = new ArrayList<>();
+
 
             imageReader= ImageReader.newInstance(picWidth, picHeight, imageFormat, 4);
             imageReader.setOnImageAvailableListener(onImageAvailableListener, backgroundHandler);
@@ -139,7 +140,7 @@ class CameraLollipop implements ICamera {
         mCurrentImageCount=0;
         captureResult=null;
         captureImage=null;
-        mCaptureImageList.clear();
+        mCaptureImagePlaneList = new byte[mRequiredImageNumber][3][];
         openCamera();
     }
 
@@ -281,18 +282,33 @@ class CameraLollipop implements ICamera {
     private final ImageReader.OnImageAvailableListener onImageAvailableListener = new ImageReader.OnImageAvailableListener() {
         @Override
         public void onImageAvailable(ImageReader reader) {
+            captureImage = imageReader.acquireNextImage();
+            Image.Plane[] planeArray = captureImage.getPlanes();
+
+            ByteBuffer buffer = planeArray[0].getBuffer();
+            byte[] y = new byte[buffer.remaining()];
+            buffer.get(y);
+
+            buffer = planeArray[1].getBuffer();
+            byte[] u = new byte[buffer.remaining()];
+            buffer.get(u);
+
+            buffer = planeArray[2].getBuffer();
+            byte[] v = new byte[buffer.remaining()];
+            buffer.get(v);
+
+            mCaptureImagePlaneList[mCurrentImageCount][0] = y;
+            mCaptureImagePlaneList[mCurrentImageCount][1] = u;
+            mCaptureImagePlaneList[mCurrentImageCount][2] = v;
             ++mCurrentImageCount;
-            captureImage = imageReader.acquireLatestImage();
-            mCaptureImageList.add(captureImage);
+            captureImage.close(); //Allow more image to be captured
+            captureImage = null;
 
             if (mCurrentImageCount== mRequiredImageNumber){
                 cameraDevice.close();
-                mCallback.onPictureTaken(mCaptureImageList.toArray(new Image[mCaptureImageList.size()]));
-                captureImage.close();
-                captureImage=null;
+                mCallback.onPictureTaken(mCaptureImagePlaneList);
+                cameraCaptureSession.close();
             }
-
-            cameraCaptureSession.close(); //TODO maybe 1 capture session no need close??
         }
     };
 
