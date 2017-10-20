@@ -61,7 +61,7 @@ public class ChaosTrueRNG {
     public static byte[] PostprocessParallel(byte[] byteArr){
         //Prep for thread creation
         int numberOfCores =  Helper.GetNumberOfCores();
-        numberOfCores=5; //Testing implementation //Should be removed at release
+//        numberOfCores=1; //Testing implementation //Should be removed at release
 
         //Postprocess preparation - Divide (Group) byte into group of 4 (int32)
         int[] valueList = new int[byteArr.length/4]; //Int32
@@ -235,6 +235,7 @@ public class ChaosTrueRNG {
 
         private int switchCase;
         private double LogisticMapRunnable(double initValue){ //Logistic Map
+            //TODO Check it trigger how many time
             if (initValue<=0)
                 initValue=0.01;
 

@@ -17,6 +17,7 @@ import android.media.ImageReader;
 import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.os.SystemClock;
 import android.support.annotation.NonNull;
 import android.support.annotation.RequiresApi;
 import android.util.Size;
@@ -49,7 +50,7 @@ class CameraLollipop implements ICamera {
 
     //Internal
 //    private List<ImageReader> imageReaderList;
-    private int mRequiredImageNumber = 2; //Burst Number = 300
+    private int mRequiredImageNumber = 50; //Burst Number = 300 / 2
     private int mCurrentImageCount=0;
     private ImageReader imageReader;
     private Handler backgroundHandler;
@@ -68,6 +69,7 @@ class CameraLollipop implements ICamera {
     private int dummyCount;
     private int imageFormat;
 
+    private long startTimer;
 
     private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
     static {
@@ -141,6 +143,7 @@ class CameraLollipop implements ICamera {
         captureResult=null;
         captureImage=null;
         mCaptureImagePlaneList = new byte[mRequiredImageNumber][3][];
+        startTimer=System.currentTimeMillis();
         openCamera();
     }
 
@@ -282,6 +285,9 @@ class CameraLollipop implements ICamera {
     private final ImageReader.OnImageAvailableListener onImageAvailableListener = new ImageReader.OnImageAvailableListener() {
         @Override
         public void onImageAvailable(ImageReader reader) {
+            System.out.println("Time Taken : " + ((System.currentTimeMillis()-startTimer)/1000.0) );
+            startTimer= System.currentTimeMillis();
+
             captureImage = imageReader.acquireNextImage();
             Image.Plane[] planeArray = captureImage.getPlanes();
 

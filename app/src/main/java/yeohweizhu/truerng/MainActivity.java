@@ -261,7 +261,7 @@ public class MainActivity extends AppCompatActivity {
 //                        finalByteList.add(postprocessResult[j]);
 //                    }
 //                }
-
+//
 //                completed_iter_num++;
 //                if (completed_iter_num<capture_iter_num){
 //                    //Continue to take
